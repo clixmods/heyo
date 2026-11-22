@@ -63,9 +63,7 @@ mod imp {
 #[cfg(all(unix, not(target_os = "macos")))]
 mod imp {
     pub async fn capture() -> Option<String> {
-        if std::env::var_os("DISPLAY").is_none() {
-            return None;
-        }
+        std::env::var_os("DISPLAY")?; // xdotool needs X11
         super::run("xdotool", &["getactivewindow"]).await
     }
 
