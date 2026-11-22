@@ -16,6 +16,29 @@ Thanks for helping! Heyo is open source under the [MIT license](LICENSE). Anyone
 3. Before opening a PR, make sure `cargo build` (in `src-tauri/`) passes with **no warnings**, and that `cargo fmt` and `cargo clippy` are clean.
 4. Test the flow you changed by hand: shortcut → popup → answer → inserted text. Say in the PR which OS you tested on.
 
+## Branches (git flow)
+
+| Branch | Purpose |
+|---|---|
+| `main` | Released code. **Every push builds the installers and publishes a GitHub release** for the version in `src-tauri/tauri.conf.json`. |
+| `develop` | Integration branch, the default. **Open your pull requests against `develop`.** |
+| `feature/<name>`, `fix/<name>` | Your work, branched from `develop`. |
+| `release/<x.y.z>` | Branched from `develop` to prepare a release: bump the version, then PR into `main`. |
+| `hotfix/<name>` | Urgent fix branched from `main`, PR into `main`, then merged back into `develop`. |
+
+**Cutting a release** (maintainers):
+
+1. `git checkout -b release/0.2.0 develop`
+2. Bump the version in `src-tauri/tauri.conf.json` (this names the release), `src-tauri/Cargo.toml` and `package.json`.
+3. PR `release/0.2.0` → `main`. Merging it runs the Release workflow, which creates `v0.2.0` with the installers.
+4. Merge `main` back into `develop`.
+
+Pushing to `main` without bumping the version rebuilds the installers of the current release in place.
+
+## CI
+
+Every push to `develop`/`main` and every PR runs `cargo fmt --check`, `cargo clippy -- -D warnings` and a build on Windows, macOS and Linux (`.github/workflows/ci.yml`). Keep it green.
+
 ## Pull requests
 
 - One topic per PR, with a clear description of what changes for the user.

@@ -25,7 +25,7 @@ tokio = { version = "1.54.1", features = ["process", "io-util", "time", "sync", 
 uuid = { version = "1.29.3", features = ["v4"] }
 
 [build-dependencies]
-tauri-build = "2.7.6"
+tauri-build = { version = "2.7.6", features = [] }
 
 [target."cfg(windows)".dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_UI_Input_KeyboardAndMouse", "Win32_System_DataExchange", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader"] }

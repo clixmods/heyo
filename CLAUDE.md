@@ -46,6 +46,13 @@ There are no automated tests yet; verify by running the app.
 - Keep dependencies minimal; prefer the Tauri plugins already in `Cargo.toml`.
 - The popup window is transparent with a 14 px margin for the shadow; `resize_popup` resizes the native window to the panel height and keeps it anchored above the caret. Avoid CSS transforms/animations on `.panel`: combined with live window resizing they caused rendering glitches in WebView2.
 
+## Branches, CI and releases
+
+- Git flow: work on `feature/*` or `fix/*` from `develop`, PR into `develop` (the default branch). `main` = released code.
+- `.github/workflows/ci.yml`: fmt (Windows), `clippy -D warnings` and `cargo build` on Windows, macOS and Linux for every push/PR. Code behind `#[cfg(target_os = ...)]` must compile warning-free on all three.
+- `.github/workflows/release.yml`: every push to `main` builds installers with `tauri-action` and attaches them to the release `v<version>` (version from `src-tauri/tauri.conf.json`; bump it with `Cargo.toml` and `package.json` in a `release/x.y.z` branch).
+- Never commit secrets, `.env` files, logs, or machine-specific paths. The only token CI uses is the built-in `GITHUB_TOKEN`.
+
 ## Adding an AI provider
 
 1. Add a backend constant in `settings.rs` (next to `BACKEND_API`, `BACKEND_CLAUDE_CODE`).

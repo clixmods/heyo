@@ -1,6 +1,28 @@
-# Heyo
+<p align="center">
+  <img src="docs/logo.svg" width="96" height="96" alt="Heyo logo" />
+</p>
 
-**Summon AI from anywhere.** Press a shortcut or a mouse button, a tiny window pops up right where you're typing, and the answer is written straight into your app.
+<h1 align="center">Heyo</h1>
+
+<p align="center">
+  <b>Summon AI from anywhere.</b><br />
+  Press a shortcut or a mouse button, a tiny window pops up right where you're typing,<br />
+  and the answer is written straight into your app.
+</p>
+
+<p align="center">
+  <a href="https://github.com/clixmods/heyo/releases/latest"><b>Download</b></a> ·
+  <a href="#build-from-source">Build from source</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/clixmods/heyo/actions/workflows/ci.yml"><img src="https://github.com/clixmods/heyo/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI" /></a>
+  <a href="https://github.com/clixmods/heyo/releases/latest"><img src="https://img.shields.io/github/v/release/clixmods/heyo?label=release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/clixmods/heyo" alt="MIT license" /></a>
+</p>
+
+---
 
 Heyo works in any app: your chat, your email, your IDE, a browser form. You pick a **profile** (instructions + knowledge files + model), type, hit Enter, and the answer is typed into the field you were in. Or shown in the window, chat-style.
 
@@ -46,6 +68,10 @@ The **launcher** (`Ctrl+Alt+K` by default) reopens the window on the last used p
 | `Ctrl+↵` | (chat) insert the answer into the field |
 | `Ctrl+N` | (chat) new conversation |
 | `Esc` | cancel the request, otherwise close |
+
+## Install
+
+Grab the installer for your OS from the [latest release](https://github.com/clixmods/heyo/releases/latest): `…_x64-setup.exe` for Windows, `.dmg` for macOS, `.AppImage` / `.deb` / `.rpm` for Linux. Builds aren't code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask you to confirm the first time.
 
 ## Build from source
 

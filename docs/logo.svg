@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="Heyo logo">
+  <rect x="4" y="4" width="120" height="120" rx="30" fill="#1d1b18"/>
+  <path d="M40 30h48a14 14 0 0 1 14 14v28a14 14 0 0 1-14 14H56l-18 14v-14h0a14 14 0 0 1-12-14V44a14 14 0 0 1 14-14z" fill="#f4f0e8"/>
+  <rect x="44" y="45" width="8" height="26" rx="2.5" fill="#d9774e"/>
+</svg>
