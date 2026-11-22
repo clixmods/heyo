@@ -134,42 +134,60 @@ fn clipboard_seq() -> Option<u32> {
     None
 }
 
+#[derive(Default, Clone, Copy)]
+struct HeldModifiers {
+    meta: bool,
+    alt: bool,
+    shift: bool,
+    ctrl: bool,
+}
+
+/// Snapshot of the physical modifier keys. Synchronous on purpose: the device handle
+/// isn't `Send` on Linux (X11), so it must never live across an `.await`.
+fn held_modifiers() -> Option<HeldModifiers> {
+    use device_query::{DeviceQuery, DeviceState, Keycode};
+    let keys = std::panic::catch_unwind(|| DeviceState::new().get_keys()).ok()?;
+    let any = |ks: &[Keycode]| keys.iter().any(|k| ks.contains(k));
+    Some(HeldModifiers {
+        meta: any(&[
+            Keycode::LMeta,
+            Keycode::RMeta,
+            Keycode::Command,
+            Keycode::RCommand,
+        ]),
+        alt: any(&[
+            Keycode::LAlt,
+            Keycode::RAlt,
+            Keycode::LOption,
+            Keycode::ROption,
+        ]),
+        shift: any(&[Keycode::LShift, Keycode::RShift]),
+        ctrl: any(&[Keycode::LControl, Keycode::RControl]),
+    })
+}
+
 /// The shortcut's modifiers are usually still held, which would turn Ctrl+C into Ctrl+Alt+C.
 /// Instead of waiting for the user to let go, release Alt/Shift/Ctrl ourselves (Alt and Shift first,
 /// while Ctrl is still down, so a lone Alt release can't open the app's menu bar).
 /// Win/Cmd is the exception: releasing it by hand could open the Start menu, so we wait for it.
 async fn release_modifiers(app: &AppHandle) {
-    use device_query::{DeviceQuery, DeviceState, Keycode};
     // DeviceState can fail where there is no X11 (pure Wayland): then just wait a moment.
-    let Ok(state) = std::panic::catch_unwind(DeviceState::new) else {
+    let Some(mut mods) = held_modifiers() else {
         sleep(150).await;
         return;
     };
-    let held = |ks: &[Keycode]| state.get_keys().iter().any(|k| ks.contains(k));
-    const META: &[Keycode] = &[
-        Keycode::LMeta,
-        Keycode::RMeta,
-        Keycode::Command,
-        Keycode::RCommand,
-    ];
-    const ALT: &[Keycode] = &[
-        Keycode::LAlt,
-        Keycode::RAlt,
-        Keycode::LOption,
-        Keycode::ROption,
-    ];
-    const SHIFT: &[Keycode] = &[Keycode::LShift, Keycode::RShift];
-    const CTRL: &[Keycode] = &[Keycode::LControl, Keycode::RControl];
-
     for _ in 0..100 {
         // up to 2 s, only while Win/Cmd is held
-        if !held(META) {
+        if !mods.meta {
             break;
         }
         sleep(20).await;
+        mods = held_modifiers().unwrap_or_default();
     }
 
-    let (alt, shift, ctrl) = (held(ALT), held(SHIFT), held(CTRL));
+    let HeldModifiers {
+        alt, shift, ctrl, ..
+    } = mods;
     if !(alt || shift || ctrl) {
         return;
     }
