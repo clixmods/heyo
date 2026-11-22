@@ -1,0 +1,9 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Heyo windows: only core events are needed, everything else goes through app commands.",
+  "windows": ["popup", "settings"],
+  "permissions": [
+    "core:default"
+  ]
+}

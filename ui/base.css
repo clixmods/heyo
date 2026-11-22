@@ -1,0 +1,73 @@
+/* Shared design tokens: quiet, warm neutrals with one accent. Light & dark follow the OS. */
+:root {
+  --bg: #fbfaf8;
+  --bg-elev: #ffffff;
+  --bg-soft: #f2f0ec;
+  --bg-hover: #ebe8e2;
+  --line: rgba(20, 18, 14, 0.09);
+  --line-strong: rgba(20, 18, 14, 0.16);
+  --text: #1d1b18;
+  --text-soft: #5d5952;
+  --text-faint: #6b665d;
+  --accent: #d9774e;
+  --accent-soft: rgba(217, 119, 78, 0.12);
+  --danger: #c2453d;
+  --ok: #3f8f5b;
+  --shadow: 0 18px 50px -12px rgba(20, 16, 10, 0.28), 0 2px 8px rgba(20, 16, 10, 0.08);
+  --radius: 14px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1b1a;
+    --bg-elev: #242321;
+    --bg-soft: #2a2927;
+    --bg-hover: #33312e;
+    --line: rgba(255, 250, 240, 0.08);
+    --line-strong: rgba(255, 250, 240, 0.15);
+    --text: #f1eee8;
+    --text-soft: #b5b0a7;
+    --text-faint: #9c978e;
+    --accent: #e8875d;
+    --accent-soft: rgba(232, 135, 93, 0.15);
+    --danger: #ec6d64;
+    --ok: #6cc08a;
+    --shadow: 0 22px 60px -12px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.35);
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button { cursor: pointer; }
+
+kbd {
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  border-bottom-width: 2px;
+  color: var(--text-soft);
+  background: var(--bg-soft);
+}
+
+.hidden { display: none !important; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }

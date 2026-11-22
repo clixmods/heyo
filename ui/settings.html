@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heyo</title>
+  <link rel="stylesheet" href="base.css" />
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="side">
+      <div class="brand">
+        <span class="logo"><span></span></span>
+        <span>Heyo</span>
+      </div>
+      <div class="side-label">Profiles</div>
+      <nav id="profileList"></nav>
+      <button class="side-add" id="addProfile">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        New profile
+      </button>
+      <div class="side-spacer"></div>
+      <nav><button class="side-item" id="generalBtn">General</button></nav>
+    </aside>
+
+    <main class="content">
+      <!-- Profile editor -->
+      <section id="profilePane" class="pane hidden">
+        <header class="pane-head">
+          <input class="title-input" id="pName" placeholder="Profile name" />
+          <button class="ghost danger" id="deleteProfile">Delete</button>
+        </header>
+
+        <div class="field">
+          <label>Shortcut</label>
+          <div class="row">
+            <button class="hotkey" id="pHotkey" data-target="profile"></button>
+            <button class="ghost small" id="pHotkeyClear">Clear</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Instructions <span class="sub">— the profile's system prompt</span></label>
+          <textarea id="pInstructions" rows="6" placeholder="Translate the text into natural English. Don't answer the message, translate it."></textarea>
+        </div>
+
+        <div class="field">
+          <label>Knowledge files <span class="sub">— added to the context, like files in a claude.ai project</span></label>
+          <ul class="files" id="pFiles"></ul>
+          <button class="ghost small" id="pAddFiles">Add files…</button>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label>Answer</label>
+            <div class="seg" id="pOutput">
+              <button data-v="insert">Type into the field</button>
+              <button data-v="chat">Show in the window</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Engine</label>
+            <div class="seg" id="pBackend">
+              <button data-v="claude-code">Claude Code</button>
+              <button data-v="api">API</button>
+            </div>
+            <p class="help" id="pBackendHelp"></p>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <div class="field">
+            <label for="pModel">Model</label>
+            <select id="pModel">
+              <option value="claude-opus-5-5">Claude Opus 5.5 — most capable</option>
+              <option value="claude-sonnet-5-5">Claude Sonnet 5.5 — fast and capable</option>
+              <option value="claude-haiku-5-5">Claude Haiku 5.5 — fastest</option>
+              <option value="claude-fable-5-2">Claude Fable 5.2 — most powerful (pricey)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="pEffort">Thinking effort</label>
+            <select id="pEffort">
+              <option value="">Default</option>
+              <option value="low">Low — quick answers</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+              <option value="xhigh">Very high</option>
+              <option value="max">Max</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" id="pUseSelection" /><span class="sw"></span>
+            <span><b>Use the selected text</b><br /><span class="sub">Text highlighted in the app is sent along, and replaced by the answer.</span></span>
+          </label>
+          <label class="toggle"><input type="checkbox" id="pKeepHistory" /><span class="sw"></span>
+            <span><b>Keep the conversation</b><br /><span class="sub">The profile remembers previous exchanges.</span></span>
+          </label>
+        </div>
+
+        <div class="field" id="pRepoField">
+          <label>Code repository <span class="sub">— Claude Code can read this folder to answer (read-only)</span></label>
+          <div class="row">
+            <input id="pRepo" placeholder="None" />
+            <button class="ghost small" id="pPickRepo">Choose…</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- General settings -->
+      <section id="generalPane" class="pane hidden">
+        <header class="pane-head"><h1>General</h1></header>
+
+        <div class="field">
+          <label>Launcher <span class="sub">— opens the window on the last used profile</span></label>
+          <div class="row">
+            <button class="hotkey" id="gLauncher" data-target="launcher"></button>
+            <button class="ghost small" id="gLauncherClear">Clear</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Claude Code <span class="sub">— uses your Claude subscription, no API key needed</span></label>
+          <div class="row">
+            <input id="gClaudePath" placeholder="claude" />
+            <button class="ghost small" id="gCheckClaude">Check</button>
+          </div>
+          <p class="help" id="gClaudeStatus"></p>
+        </div>
+
+        <div class="field">
+          <label>Anthropic API key <span class="sub">— for profiles using the API, stored in the system keychain</span></label>
+          <div class="row">
+            <input id="gApiKey" type="password" placeholder="sk-ant-…" autocomplete="off" />
+            <button class="ghost small" id="gSaveKey">Save key</button>
+          </div>
+          <p class="help" id="gKeyStatus"></p>
+        </div>
+
+        <div class="field">
+          <label>Text insertion</label>
+          <div class="seg" id="gInsert">
+            <button data-v="paste">Paste (fast)</button>
+            <button data-v="type">Type keystrokes</button>
+          </div>
+          <p class="help">“Paste” goes through the clipboard and restores it afterwards. “Type” simulates keystrokes, for apps that block pasting.</p>
+        </div>
+
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" id="gAutostart" /><span class="sw"></span>
+            <span><b>Launch at startup</b><br /><span class="sub">Heyo waits in the system tray.</span></span>
+          </label>
+        </div>
+
+        <p class="help mono" id="gConfigPath"></p>
+      </section>
+    </main>
+  </div>
+
+  <footer class="savebar" id="savebar">
+    <span id="saveMsg"></span>
+    <button class="primary" id="saveBtn">Save</button>
+  </footer>
+
+  <div class="recorder hidden" id="recorder">
+    <div class="recorder-box">
+      <div class="rec-title">Press a key combination, an F1–F24 key, or a mouse button</div>
+      <div class="rec-keys" id="recKeys">…</div>
+      <div class="rec-help"><kbd>Esc</kbd> cancel · letters and digits need a modifier (Ctrl, Alt, Shift, <span id="recMeta">Win</span>)</div>
+    </div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>
