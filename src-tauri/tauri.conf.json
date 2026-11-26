@@ -42,6 +42,16 @@
       "icons/icon.ico"
     ],
     "shortDescription": "Summon AI anywhere with a shortcut or a mouse button",
-    "category": "Productivity"
+    "category": "Productivity",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU4RDg5NzVFQ0NDREQzQkIKUldTNzA4M01YcGZZV0ZZUjVURUlRRW1HTVVYTVVPTElteXdDZkpaQzJxVDJRMStrbnFWOEExLy8K",
+      "endpoints": ["https://github.com/clixmods/heyo/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

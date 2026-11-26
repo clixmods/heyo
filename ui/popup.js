@@ -10,6 +10,7 @@ const els = {
   input: $("input"), status: $("status"), statusText: $("statusText"), error: $("error"),
   answer: $("answer"), answerText: $("answerText"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
   insertKbd: $("insertKbd"), hints: $("hints"),
+  update: $("update"), updateText: $("updateText"), updateBtn: $("updateBtn"),
 };
 
 let state = null; // { profile, profiles, selection, history, mac }
@@ -53,6 +54,8 @@ function render() {
   const engine = p.backend === "api" ? "API" : "Claude Code";
   els.modelTag.textContent = [MODEL_LABELS[p.model] ?? p.model, p.effort, engine].filter(Boolean).join(" · ");
   els.newConvBtn.classList.toggle("hidden", !p.keepHistory);
+  els.update.classList.toggle("hidden", !state.update);
+  els.updateText.textContent = state.update ? `Heyo v${state.update} is available` : "";
 
   // Selection chip
   const sel = (state.selection || "").trim();
@@ -328,6 +331,11 @@ els.settingsBtn.addEventListener("click", () => invoke("open_settings"));
 els.newConvBtn.addEventListener("click", newConversation);
 els.insertBtn.addEventListener("click", insertAnswer);
 els.copyBtn.addEventListener("click", copyAnswer);
+els.updateBtn.addEventListener("click", () => {
+  els.updateBtn.disabled = true;
+  els.updateBtn.textContent = "Installing…";
+  invoke("install_update");
+});
 els.selClear.addEventListener("click", () => {
   state.selection = "";
   render();
