@@ -96,6 +96,8 @@ function renderProfile() {
   $("pEffort").value = p.effort || "";
   $("pUseSelection").checked = p.useSelection;
   $("pKeepHistory").checked = p.keepHistory;
+  $("pScreenshot").checked = !!p.attachScreenshot;
+  $("pScreenshotRow").classList.toggle("hidden", !data.screenshotAvailable);
   $("pRepo").value = p.repoPath || "";
   $("pRepoField").classList.toggle("hidden", p.backend !== "claude-code");
   $("pBackendHelp").textContent =
@@ -131,6 +133,10 @@ function renderGeneral() {
   setSeg($("gInsert"), draft.insertMethod);
   $("gAutostart").checked = data.autostart;
   $("gCheckUpdates").checked = draft.checkUpdates;
+  $("gShowHints").checked = draft.popup.showHints;
+  $("gShowModel").checked = draft.popup.showModel;
+  $("gTranslucent").checked = draft.popup.translucent;
+  $("gCloseOutside").checked = draft.popup.closeOnClickOutside;
   $("gConfigPath").textContent = "Settings file: " + data.configPath;
   renderKeyStatus(data.apiKeySource);
 }
@@ -170,6 +176,7 @@ $("pModel").addEventListener("change", (e) => { currentProfile().model = e.targe
 $("pEffort").addEventListener("change", (e) => { currentProfile().effort = e.target.value; updateSaveBar(); });
 $("pUseSelection").addEventListener("change", (e) => { currentProfile().useSelection = e.target.checked; updateSaveBar(); });
 $("pKeepHistory").addEventListener("change", (e) => { currentProfile().keepHistory = e.target.checked; updateSaveBar(); });
+$("pScreenshot").addEventListener("change", (e) => { currentProfile().attachScreenshot = e.target.checked; updateSaveBar(); });
 
 onSeg($("pOutput"), (v) => { currentProfile().output = v; updateSaveBar(); });
 onSeg($("pBackend"), (v) => { currentProfile().backend = v; renderProfile(); updateSaveBar(); });
@@ -202,7 +209,7 @@ $("addProfile").addEventListener("click", () => {
   const p = {
     id: newId(), name: "New profile", hotkey: "", backend: "claude-code", model: "claude-opus-5-5",
     effort: "low", instructions: "", knowledgeFiles: [], repoPath: "", output: "insert",
-    useSelection: true, keepHistory: false,
+    useSelection: true, keepHistory: false, attachScreenshot: false,
   };
   draft.profiles.push(p);
   select(p.id);
@@ -224,6 +231,9 @@ $("generalBtn").addEventListener("click", () => select("general"));
 $("gClaudePath").addEventListener("input", (e) => { draft.claudePath = e.target.value; updateSaveBar(); });
 onSeg($("gInsert"), (v) => { draft.insertMethod = v; updateSaveBar(); });
 $("gCheckUpdates").addEventListener("change", (e) => { draft.checkUpdates = e.target.checked; updateSaveBar(); });
+for (const [id, key] of [["gShowHints", "showHints"], ["gShowModel", "showModel"], ["gTranslucent", "translucent"], ["gCloseOutside", "closeOnClickOutside"]]) {
+  $(id).addEventListener("change", (e) => { draft.popup[key] = e.target.checked; updateSaveBar(); });
+}
 $("gLauncherClear").addEventListener("click", () => {
   draft.launcherHotkey = "";
   setHotkeyBtn($("gLauncher"), "");

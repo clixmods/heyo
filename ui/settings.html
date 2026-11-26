@@ -99,6 +99,9 @@
           <label class="toggle"><input type="checkbox" id="pKeepHistory" /><span class="sw"></span>
             <span><b>Keep the conversation</b><br /><span class="sub">The profile remembers previous exchanges.</span></span>
           </label>
+          <label class="toggle" id="pScreenshotRow"><input type="checkbox" id="pScreenshot" /><span class="sw"></span>
+            <span><b>Attach a screenshot</b><br /><span class="sub">Captures your screen when the shortcut fires and sends it along as context. You can drop it from the popup before sending.</span></span>
+          </label>
         </div>
 
         <div class="field" id="pRepoField">
@@ -147,6 +150,24 @@
             <button data-v="type">Type keystrokes</button>
           </div>
           <p class="help">“Paste” goes through the clipboard and restores it afterwards. “Type” simulates keystrokes, for apps that block pasting.</p>
+        </div>
+
+        <div class="field">
+          <label>Popup window</label>
+          <div class="toggles tight">
+            <label class="toggle"><input type="checkbox" id="gShowHints" /><span class="sw"></span>
+              <span><b>Show keyboard hints</b><br /><span class="sub">The shortcut list at the bottom of the popup.</span></span>
+            </label>
+            <label class="toggle"><input type="checkbox" id="gShowModel" /><span class="sw"></span>
+              <span><b>Show the model</b><br /><span class="sub">Model, effort and engine in the popup header.</span></span>
+            </label>
+            <label class="toggle"><input type="checkbox" id="gTranslucent" /><span class="sw"></span>
+              <span><b>Translucent background</b><br /><span class="sub">See-through, with your system's blur (Windows Acrylic, macOS vibrancy).</span></span>
+            </label>
+            <label class="toggle"><input type="checkbox" id="gCloseOutside" /><span class="sw"></span>
+              <span><b>Close when clicking elsewhere</b><br /><span class="sub">Off: the popup floats until you press Esc.</span></span>
+            </label>
+          </div>
         </div>
 
         <div class="toggles">

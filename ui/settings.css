@@ -192,3 +192,5 @@ button.primary:disabled { opacity: 0.35; cursor: default; }
 .rec-title { color: var(--text-soft); font-size: 13px; }
 .rec-keys { font-size: 26px; font-weight: 650; margin: 14px 0; letter-spacing: 0.03em; min-height: 36px; }
 .rec-help { color: var(--text-faint); font-size: 12px; }
+
+.toggles.tight { margin: 2px 0 0; gap: 10px; }

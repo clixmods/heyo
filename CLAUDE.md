@@ -31,6 +31,8 @@ There are no automated tests yet; verify by running the app.
 | `src-tauri/src/inject.rs` | capture selection (Ctrl/Cmd+C, Windows clipboard sequence number), insert text (paste with clipboard restore, or typed), modifier release |
 | `src-tauri/src/focus.rs` | remember/restore the foreground app per OS; `caret_rect` (Win32 GUI thread info, then MSAA `OBJID_CARET`) |
 | `src-tauri/src/updates.rs` | update checks against the GitHub release's `latest.json` (tauri-plugin-updater); never installs without the user's click |
+| `src-tauri/src/speech.rs` | mic button: WinRT continuous dictation, emits `dictation-partial` / `dictation-text` / `dictation-stopped` to the popup |
+| `src-tauri/src/screenshot.rs` | "Attach a screenshot" profiles: monitor capture (`xcap`, Windows/macOS) → JPEG, longest side 1568 px |
 | `src-tauri/src/mouse.rs` | mouse-button shortcuts via a Windows `WH_MOUSE_LL` hook (swallows the bound click) |
 | `ui/index.html`, `popup.js`, `popup.css` | popup window |
 | `ui/settings.html`, `settings.js`, `settings.css` | settings window (profiles editor, shortcut recorder) |

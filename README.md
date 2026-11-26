@@ -36,6 +36,10 @@ Example: a "Translate → EN" profile on your side mouse button. Write your mess
 - **Opens at your text caret**, above the line you're typing on.
 - **Types the answer for you** (clipboard paste that restores your clipboard, or simulated keystrokes).
 - **Uses your selection**: highlighted text is sent and replaced.
+- **Screenshot context** (per profile, off by default): your screen is captured when the shortcut fires and sent along, so you can ask "what does this error mean?" (Windows, macOS).
+- **Dictation**: the mic button (`Ctrl+M`) listens and types what you say, right in the popup, with no system panel (Windows speech recognition).
+- **Recall what you typed**: `↑` / `↓` bring back your previous messages, like a terminal.
+- **Your look**: hide the keyboard hints or the model name, make the popup translucent with your system's blur, choose whether clicking elsewhere closes it.
 - **Profiles = projects**: a system prompt, knowledge files, model and thinking effort.
 - **Two engines**: [Claude Code](https://claude.com/claude-code) (your Claude subscription, no API key) or the Anthropic API (faster, needs a key, stored in the OS keychain).
 - **Chat mode** with per-profile history, and read-only access to a code repository (Claude Code engine).
@@ -53,6 +57,7 @@ Example: a "Translate → EN" profile on your side mouse button. Write your mess
 | Engine | **Claude Code** (your Claude subscription) or **API** (Anthropic key) |
 | Model, effort | Opus 5.5 by default, low effort for speed |
 | Use the selected text | sends the highlighted text and replaces it with the answer |
+| Attach a screenshot | sends a capture of your screen with the question (dismissable from the popup) |
 | Keep the conversation | the profile remembers previous exchanges |
 | Code repository | (Claude Code) a folder Claude can read, read-only, to answer |
 
@@ -68,7 +73,9 @@ The **launcher** (`Ctrl+Alt+K` by default) reopens the window on the last used p
 | `Ctrl+1…9` (`⌘` on macOS) | jump to profile n |
 | `Ctrl+↵` | (chat) insert the answer into the field |
 | `Ctrl+N` | (chat) new conversation |
-| `Esc` | cancel the request, otherwise close |
+| `↑` / `↓` | previous / next message you sent |
+| `Ctrl+M` | start / stop dictation (Windows) |
+| `Esc` | cancel the request, stop dictation, otherwise close |
 
 ## Install
 
@@ -102,6 +109,9 @@ For the **API** engine, paste your key in Settings → General (stored in the OS
 - Settings: `settings.json` in the config folder (`%APPDATA%\Hoppy`, `~/Library/Application Support/Hoppy`, `~/.config/Hoppy`).
 - Conversations of profiles that keep history: `conversations/<profile>.json` in the same folder.
 - Log: `hoppy.log` in the same folder (timings and errors only, never your text).
+- Your last 100 messages, for `↑` / `↓`, are kept in Hoppy's local web storage on this computer.
+- Screenshots are never saved: they go to the engine with your message (for Claude Code, through a temporary file deleted right after).
+- Dictation uses Windows speech recognition, which needs **Online speech recognition** on (Settings → Privacy & security → Speech); Microsoft processes the audio.
 - The API key is stored in the OS keychain, never in a file.
 - Your text goes only to the engine you chose (Claude Code or the Anthropic API). No telemetry.
 

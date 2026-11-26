@@ -31,6 +31,8 @@ pub struct Profile {
     pub use_selection: bool,
     /// Keep a running conversation between uses instead of starting fresh every time.
     pub keep_history: bool,
+    /// Capture the screen when the shortcut fires and send it along as context.
+    pub attach_screenshot: bool,
 }
 
 impl Default for Profile {
@@ -48,6 +50,32 @@ impl Default for Profile {
             output: OUTPUT_INSERT.into(),
             use_selection: true,
             keep_history: false,
+            attach_screenshot: false,
+        }
+    }
+}
+
+/// How the popup window looks and behaves.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PopupLook {
+    /// Keyboard hints at the bottom of the popup.
+    pub show_hints: bool,
+    /// Model, effort and engine in the popup header.
+    pub show_model: bool,
+    /// See-through background with the OS blur (Windows Acrylic, macOS vibrancy).
+    pub translucent: bool,
+    /// Clicking outside the popup closes it. Off = it floats until Esc.
+    pub close_on_click_outside: bool,
+}
+
+impl Default for PopupLook {
+    fn default() -> Self {
+        Self {
+            show_hints: true,
+            show_model: true,
+            translucent: false,
+            close_on_click_outside: true,
         }
     }
 }
@@ -63,6 +91,7 @@ pub struct AppSettings {
     pub insert_method: String,
     /// Check GitHub releases in the background and tell the user when a new version is out.
     pub check_updates: bool,
+    pub popup: PopupLook,
     pub last_profile_id: String,
     pub profiles: Vec<Profile>,
 }
@@ -75,6 +104,7 @@ impl Default for AppSettings {
             claude_path: "claude".into(),
             insert_method: "paste".into(),
             check_updates: true,
+            popup: PopupLook::default(),
             last_profile_id: "translate".into(),
             profiles: vec![
                 Profile {
