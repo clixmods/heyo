@@ -9,7 +9,7 @@ const els = {
   history: $("history"), selection: $("selection"), selText: $("selText"), selClear: $("selClear"),
   input: $("input"), status: $("status"), statusText: $("statusText"), error: $("error"),
   answer: $("answer"), answerText: $("answerText"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
-  insertKbd: $("insertKbd"), hints: $("hints"),
+  insertKbd: $("insertKbd"), hints: $("hints"), micBtn: $("micBtn"),
 };
 
 let state = null; // { profile, profiles, selection, history, mac }
@@ -53,6 +53,7 @@ function render() {
   const engine = p.backend === "api" ? "API" : "Claude Code";
   els.modelTag.textContent = [MODEL_LABELS[p.model] ?? p.model, p.effort, engine].filter(Boolean).join(" · ");
   els.newConvBtn.classList.toggle("hidden", !p.keepHistory);
+  els.micBtn.classList.toggle("hidden", !state.dictation);
 
   // Selection chip
   const sel = (state.selection || "").trim();
@@ -102,6 +103,7 @@ function renderHints() {
     items.push(`${k(mod() + " ↵")} insert`);
     if (state?.profile?.keepHistory) items.push(`${k(mod() + " N")} new chat`);
   }
+  if (state?.dictation) items.push(`${k(mod() + " M")} dictate`);
   items.push(`${k("Esc")} close`);
   els.hints.innerHTML = items.map((h) => `<span>${h}</span>`).join("");
   els.insertKbd.textContent = `${mod()} ↵`;
@@ -179,6 +181,29 @@ function reset() {
   showAnswer("");
   toggleMenu(false);
   setBusy(false);
+  setDictating(false);
+}
+
+// ---------------------------------------------------------------- voice typing
+
+// The OS does the transcription (Windows voice typing, Win+H) straight into the text field.
+// We can't see when it stops, so the button state is our best guess: it flips on each press.
+let dictating = false;
+
+function setDictating(on) {
+  dictating = on;
+  els.micBtn.setAttribute("aria-pressed", String(on));
+}
+
+async function toggleDictation() {
+  if (!state?.dictation || busy) return;
+  els.input.focus();
+  try {
+    await invoke("start_dictation");
+    setDictating(!dictating);
+  } catch (e) {
+    showError(String(e));
+  }
 }
 
 async function switchTo(id) {
@@ -317,6 +342,11 @@ document.addEventListener("keydown", (e) => {
     invoke("open_settings");
     return;
   }
+  if (cmd && e.key.toLowerCase() === "m") {
+    e.preventDefault();
+    toggleDictation();
+    return;
+  }
   if (e.key === "Enter" && !e.shiftKey && document.activeElement === els.input) {
     e.preventDefault();
     send();
@@ -328,6 +358,7 @@ els.settingsBtn.addEventListener("click", () => invoke("open_settings"));
 els.newConvBtn.addEventListener("click", newConversation);
 els.insertBtn.addEventListener("click", insertAnswer);
 els.copyBtn.addEventListener("click", copyAnswer);
+els.micBtn.addEventListener("click", toggleDictation);
 els.selClear.addEventListener("click", () => {
   state.selection = "";
   render();
