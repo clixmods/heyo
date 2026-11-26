@@ -492,7 +492,7 @@ fn popup_state(app: AppHandle) -> PopupState {
 }
 
 #[tauri::command]
-fn switch_profile(app: AppHandle, id: String) -> PopupState {
+async fn switch_profile(app: AppHandle, id: String) -> PopupState {
     app.state::<AppState>().session.lock().unwrap().profile_id = id.clone();
     remember_profile(&app, &id);
     popup_state_inner(&app)
@@ -587,7 +587,7 @@ async fn install_update(app: AppHandle) {
 }
 
 #[tauri::command]
-fn new_conversation(app: AppHandle) -> PopupState {
+async fn new_conversation(app: AppHandle) -> PopupState {
     let id = app
         .state::<AppState>()
         .session
@@ -600,12 +600,12 @@ fn new_conversation(app: AppHandle) -> PopupState {
 }
 
 #[tauri::command]
-fn hide_popup(app: AppHandle) {
+async fn hide_popup(app: AppHandle) {
     hide_popup_inner(&app);
 }
 
 #[tauri::command]
-fn resize_popup(app: AppHandle, height: f64) {
+async fn resize_popup(app: AppHandle, height: f64) {
     let win = popup(&app);
     let height = height.clamp(60.0, 720.0);
     let placement = *app.state::<AppState>().placement.lock().unwrap();
@@ -653,7 +653,7 @@ fn get_settings(app: AppHandle) -> SettingsPayload {
 
 /// Saves and re-binds shortcuts. Returns shortcut problems (the settings are saved anyway).
 #[tauri::command]
-fn save_settings(app: AppHandle, new_settings: AppSettings) -> Result<Vec<String>, String> {
+async fn save_settings(app: AppHandle, new_settings: AppSettings) -> Result<Vec<String>, String> {
     settings::save(&new_settings)?;
     *app.state::<AppState>().settings.lock().unwrap() = new_settings;
     let errors = register_shortcuts(&app);
@@ -724,26 +724,39 @@ async fn pick_folder(app: AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
-fn open_settings(app: AppHandle) {
+// Async on purpose: on Windows, creating a window from a synchronous command deadlocks the
+// event loop and leaves a blank, frozen window.
+async fn open_settings(app: AppHandle) {
     open_settings_window(&app);
 }
 
+/// The settings window is created once, then only hidden and shown again: closing it hides it
+/// (see the CloseRequested handler), so reopening is instant and can't come back blank.
 fn open_settings_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        // Settings may have changed elsewhere (tray, popup): the page reloads them if it has no unsaved edits.
+        let _ = w.emit("settings-shown", ());
         return;
     }
     match WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Hoppy")
-        .inner_size(900.0, 640.0)
-        .min_inner_size(760.0, 520.0)
+        .inner_size(940.0, 680.0)
+        .min_inner_size(780.0, 540.0)
         .center()
         .build()
     {
         Ok(w) => {
             let _ = w.set_focus();
+            let w2 = w.clone();
+            w.on_window_event(move |e| {
+                if let WindowEvent::CloseRequested { api, .. } = e {
+                    api.prevent_close();
+                    let _ = w2.hide();
+                }
+            });
         }
         Err(e) => log(&format!("settings window: {e}")),
     }
