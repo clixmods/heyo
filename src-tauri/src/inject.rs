@@ -50,7 +50,7 @@ pub async fn capture_selection(app: &AppHandle) -> String {
         return String::new();
     }
 
-    let sentinel = format!("heyo-{}", uuid::Uuid::new_v4().simple());
+    let sentinel = format!("hoppy-{}", uuid::Uuid::new_v4().simple());
     let _ = cb.write_text(sentinel.clone());
     sleep(20).await;
     chord(app, 'c').await;

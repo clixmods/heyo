@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/logo.svg" width="96" height="96" alt="Heyo logo" />
+  <img src="docs/logo.svg" width="96" height="96" alt="Hoppy logo" />
 </p>
 
-<h1 align="center">Heyo</h1>
+<h1 align="center">Hoppy</h1>
 
 <p align="center">
   <b>Summon AI from anywhere.</b><br />
@@ -11,20 +11,20 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/clixmods/heyo/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/clixmods/hoppy/releases/latest"><b>Download</b></a> ·
   <a href="#build-from-source">Build from source</a> ·
   <a href="CONTRIBUTING.md">Contribute</a>
 </p>
 
 <p align="center">
-  <a href="https://github.com/clixmods/heyo/actions/workflows/ci.yml"><img src="https://github.com/clixmods/heyo/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI" /></a>
-  <a href="https://github.com/clixmods/heyo/releases/latest"><img src="https://img.shields.io/github/v/release/clixmods/heyo?label=release" alt="Latest release" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/clixmods/heyo" alt="MIT license" /></a>
+  <a href="https://github.com/clixmods/hoppy/actions/workflows/ci.yml"><img src="https://github.com/clixmods/hoppy/actions/workflows/ci.yml/badge.svg?branch=develop" alt="CI" /></a>
+  <a href="https://github.com/clixmods/hoppy/releases/latest"><img src="https://img.shields.io/github/v/release/clixmods/hoppy?label=release" alt="Latest release" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/clixmods/hoppy" alt="MIT license" /></a>
 </p>
 
 ---
 
-Heyo works in any app: your chat, your email, your IDE, a browser form. You pick a **profile** (instructions + knowledge files + model), type, hit Enter, and the answer is typed into the field you were in. Or shown in the window, chat-style.
+Hoppy works in any app: your chat, your email, your IDE, a browser form. You pick a **profile** (instructions + knowledge files + model), type, hit Enter, and the answer is typed into the field you were in. Or shown in the window, chat-style.
 
 Example: a "Translate → EN" profile on your side mouse button. Write your message in any language, press the button, Enter, and it lands in English in your text field. If text is selected, it's sent along and replaced by the answer.
 
@@ -39,14 +39,14 @@ Example: a "Translate → EN" profile on your side mouse button. Write your mess
 - **Profiles = projects**: a system prompt, knowledge files, model and thinking effort.
 - **Two engines**: [Claude Code](https://claude.com/claude-code) (your Claude subscription, no API key) or the Anthropic API (faster, needs a key, stored in the OS keychain).
 - **Chat mode** with per-profile history, and read-only access to a code repository (Claude Code engine).
-- **Updates from GitHub**: Heyo tells you when a new version is out (banner in the popup, tray menu) and installs it when you click. Signed updates, nothing installed behind your back.
+- **Updates from GitHub**: Hoppy tells you when a new version is out (banner in the popup, tray menu) and installs it when you click. Signed updates, nothing installed behind your back.
 - Lives in the system tray, tiny footprint (Rust + Tauri, no bundled browser).
 
 ## Profiles
 
 | Setting | What it does |
 |---|---|
-| Shortcut | opens the window on this profile: a combo, a single non-typing key, or a mouse side button (Windows; that click is then reserved for Heyo) |
+| Shortcut | opens the window on this profile: a combo, a single non-typing key, or a mouse side button (Windows; that click is then reserved for Hoppy) |
 | Instructions | the profile's system prompt |
 | Knowledge files | text files added to the context, like files in a claude.ai project |
 | Answer | **Type into the field** or **Show in the window** (chat) |
@@ -72,7 +72,7 @@ The **launcher** (`Ctrl+Alt+K` by default) reopens the window on the last used p
 
 ## Install
 
-Grab the installer for your OS from the [latest release](https://github.com/clixmods/heyo/releases/latest): `…_x64-setup.exe` for Windows, `.dmg` for macOS, `.AppImage` / `.deb` / `.rpm` for Linux. Builds aren't code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask you to confirm the first time.
+Grab the installer for your OS from the [latest release](https://github.com/clixmods/hoppy/releases/latest): `…_x64-setup.exe` for Windows, `.dmg` for macOS, `.AppImage` / `.deb` / `.rpm` for Linux. Builds aren't code-signed yet, so Windows SmartScreen and macOS Gatekeeper will ask you to confirm the first time.
 
 ## Build from source
 
@@ -93,15 +93,15 @@ For the **API** engine, paste your key in Settings → General (stored in the OS
 
 ## Platform notes
 
-- **Windows**: everything works, including mouse buttons and opening at the text caret. Some combos may already be taken by another app; Heyo reports it in Settings.
-- **macOS**: on first use, allow Heyo in System Settings → Privacy & Security → **Accessibility** (needed to read the selection and type text). Heyo lives in the menu bar, with no Dock icon. The window opens near the mouse, and mouse-button shortcuts aren't supported yet (map the button to F13–F24 in your mouse software).
+- **Windows**: everything works, including mouse buttons and opening at the text caret. Some combos may already be taken by another app; Hoppy reports it in Settings.
+- **macOS**: on first use, allow Hoppy in System Settings → Privacy & Security → **Accessibility** (needed to read the selection and type text). Hoppy lives in the menu bar, with no Dock icon. The window opens near the mouse, and mouse-button shortcuts aren't supported yet (map the button to F13–F24 in your mouse software).
 - **Linux**: global shortcuts work on X11. On **Wayland**, most compositors block global shortcuts from apps: use an X11 session or bind a desktop shortcut. Same gaps as macOS for the caret and mouse buttons.
 
 ## Your data
 
-- Settings: `settings.json` in the config folder (`%APPDATA%\Heyo`, `~/Library/Application Support/Heyo`, `~/.config/Heyo`).
+- Settings: `settings.json` in the config folder (`%APPDATA%\Hoppy`, `~/Library/Application Support/Hoppy`, `~/.config/Hoppy`).
 - Conversations of profiles that keep history: `conversations/<profile>.json` in the same folder.
-- Log: `heyo.log` in the same folder (timings and errors only, never your text).
+- Log: `hoppy.log` in the same folder (timings and errors only, never your text).
 - The API key is stored in the OS keychain, never in a file.
 - Your text goes only to the engine you chose (Claude Code or the Anthropic API). No telemetry.
 

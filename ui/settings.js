@@ -1,4 +1,4 @@
-// Heyo settings: profiles on the left, one form on the right, one Save button.
+// Hoppy settings: profiles on the left, one form on the right, one Save button.
 const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
 

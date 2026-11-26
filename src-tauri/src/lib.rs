@@ -1,4 +1,4 @@
-//! Heyo: press a shortcut anywhere, a tiny popup opens on a "project" profile,
+//! Hoppy: press a shortcut anywhere, a tiny popup opens on a "project" profile,
 //! you type, Claude answers, and the answer is written into the app you were in.
 
 mod claude;
@@ -35,7 +35,7 @@ pub(crate) fn log(line: &str) {
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(dir.join("heyo.log"))
+        .open(dir.join("hoppy.log"))
     {
         let secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -509,7 +509,7 @@ fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
 }
 
 /// Mic button: opens the OS voice typing on the popup's text field (Windows: Win+H).
-/// Pressing it again toggles it off. The transcription is done by the OS, not by Heyo.
+/// Pressing it again toggles it off. The transcription is done by the OS, not by Hoppy.
 #[tauri::command]
 async fn start_dictation(app: AppHandle) -> Result<(), String> {
     #[cfg(target_os = "windows")]
@@ -682,7 +682,7 @@ fn open_settings_window(app: &AppHandle) {
         return;
     }
     match WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
-        .title("Heyo")
+        .title("Hoppy")
         .inner_size(900.0, 640.0)
         .min_inner_size(760.0, 520.0)
         .center()
@@ -736,7 +736,7 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     menu.append(&MenuItem::with_id(
         app,
         "quit",
-        "Quit Heyo",
+        "Quit Hoppy",
         true,
         None::<&str>,
     )?)?;
@@ -815,7 +815,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let menu = build_tray_menu(&handle)?;
             let mut tray = TrayIconBuilder::with_id("main")
-                .tooltip("Heyo")
+                .tooltip("Hoppy")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let id = event.id().as_ref();
@@ -872,7 +872,7 @@ pub fn run() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("failed to start Heyo")
+        .expect("failed to start Hoppy")
         .run(|_app, event| {
             // Stay in the tray when the settings window is closed.
             if let RunEvent::ExitRequested {

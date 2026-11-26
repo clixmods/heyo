@@ -32,7 +32,7 @@ jobs:
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           TAG="v$VERSION"
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "Heyo $TAG" --notes-file .github/release-notes.md
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Hoppy $TAG" --notes-file .github/release-notes.md
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)" >> "$GITHUB_OUTPUT"
