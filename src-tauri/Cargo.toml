@@ -1,11 +1,11 @@
 [package]
-name = "heyo"
+name = "hoppy"
 version = "0.1.0"
 description = "Summon AI anywhere with a shortcut or a mouse button"
 edition = "2024"
 
 [lib]
-name = "heyo"
+name = "hoppy"
 crate-type = ["rlib"]
 
 [dependencies]

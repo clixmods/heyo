@@ -1,5 +1,5 @@
 //! Updates from GitHub releases (tauri-plugin-updater).
-//! The release workflow signs each build and publishes `latest.json`. Heyo checks it at startup and
+//! The release workflow signs each build and publishes `latest.json`. Hoppy checks it at startup and
 //! every few hours, but never installs on its own: it tells the user (a banner in the popup, a tray
 //! menu item) and installs only when they click.
 
@@ -57,9 +57,9 @@ pub async fn check(app: &AppHandle, manual: bool) {
                 let app2 = app.clone();
                 app.dialog()
                     .message(format!(
-                        "Heyo v{version} is available (you have v{current})."
+                        "Hoppy v{version} is available (you have v{current})."
                     ))
-                    .title("Heyo")
+                    .title("Hoppy")
                     .buttons(MessageDialogButtons::OkCancelCustom(
                         "Install and restart".into(),
                         "Later".into(),
@@ -75,7 +75,7 @@ pub async fn check(app: &AppHandle, manual: bool) {
         }
         Ok(None) => {
             if manual {
-                message(app, &format!("Heyo is up to date (v{current})."));
+                message(app, &format!("Hoppy is up to date (v{current})."));
             }
         }
         Err(e) => {
@@ -108,5 +108,5 @@ pub async fn install_pending(app: &AppHandle) {
 }
 
 fn message(app: &AppHandle, text: &str) {
-    app.dialog().message(text).title("Heyo").show(|_| {});
+    app.dialog().message(text).title("Hoppy").show(|_| {});
 }

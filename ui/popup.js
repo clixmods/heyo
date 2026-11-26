@@ -1,4 +1,4 @@
-// Heyo popup: type, Enter, done.
+// Hoppy popup: type, Enter, done.
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -57,7 +57,7 @@ function render() {
   els.newConvBtn.classList.toggle("hidden", !p.keepHistory);
   els.micBtn.classList.toggle("hidden", !state.dictation);
   els.update.classList.toggle("hidden", !state.update);
-  els.updateText.textContent = state.update ? `Heyo v${state.update} is available` : "";
+  els.updateText.textContent = state.update ? `Hoppy v${state.update} is available` : "";
 
   // Selection chip
   const sel = (state.selection || "").trim();

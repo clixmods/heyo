@@ -1,12 +1,12 @@
-# Contributing to Heyo
+# Contributing to Hoppy
 
-Thanks for helping! Heyo is open source under the [MIT license](LICENSE). Anyone can contribute.
+Thanks for helping! Hoppy is open source under the [MIT license](LICENSE). Anyone can contribute.
 
 ## Ground rules
 
 - **Be kind.** Assume good intent, review the code, not the person.
 - **Credit others.** If you build on someone's work, say so in your PR. Keep copyright notices.
-- **Keep it small and fast.** Heyo should open instantly and stay light. No heavy frameworks in the UI, no new background services.
+- **Keep it small and fast.** Hoppy should open instantly and stay light. No heavy frameworks in the UI, no new background services.
 - **Privacy first.** Never log or send the user's text anywhere other than the engine they chose. No telemetry. Secrets go in the OS keychain, never in files or logs.
 
 ## Getting started
@@ -35,7 +35,7 @@ Thanks for helping! Heyo is open source under the [MIT license](LICENSE). Anyone
 
 Pushing to `main` without bumping the version rebuilds the installers of the current release in place.
 
-**Update signing.** Installed copies of Heyo check `latest.json` on the latest release and offer to update. Update bundles are signed: the public key is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`), and the release workflow needs two repository secrets, `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Only the maintainer holds the private key; never commit it. If it's ever lost, generate a new pair with `npx tauri signer generate`, update the public key, and users will have to reinstall once manually.
+**Update signing.** Installed copies of Hoppy check `latest.json` on the latest release and offer to update. Update bundles are signed: the public key is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`), and the release workflow needs two repository secrets, `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Only the maintainer holds the private key; never commit it. If it's ever lost, generate a new pair with `npx tauri signer generate`, update the public key, and users will have to reinstall once manually.
 
 ## CI
 
@@ -57,7 +57,7 @@ Every push to `develop`/`main` and every PR runs `cargo fmt --check`, `cargo cli
 
 ## Reporting bugs
 
-Open an issue with your OS, what you did, what you expected, and the relevant lines from `heyo.log` (check it doesn't contain anything private first).
+Open an issue with your OS, what you did, what you expected, and the relevant lines from `hoppy.log` (check it doesn't contain anything private first).
 
 ## Security
 
