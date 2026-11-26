@@ -34,9 +34,20 @@ function dirty() {
 
 function updateSaveBar(msg = "", cls = "") {
   const m = $("saveMsg");
-  m.className = cls;
+  m.className = cls || (!msg && dirty() ? "dirty" : "");
   m.textContent = msg || (dirty() ? "Unsaved changes" : "");
   $("saveBtn").disabled = !dirty();
+}
+
+// "Ctrl+Alt+T" → keycaps: one <kbd> per key, so shortcuts read like keys, not text.
+function keycaps(hk) {
+  const label = prettyHotkey(hk);
+  const keys = mac ? [...label.matchAll(/[⌃⌥⇧⌘]|[^⌃⌥⇧⌘]+/g)].map((m) => m[0]) : label.split("+");
+  return keys.filter(Boolean).map((k) => {
+    const kbd = document.createElement("kbd");
+    kbd.textContent = k;
+    return kbd;
+  });
 }
 
 function setSeg(el, value) {
@@ -53,7 +64,8 @@ function onSeg(el, cb) {
 }
 
 function setHotkeyBtn(el, value) {
-  el.textContent = value ? prettyHotkey(value) : "Click to set";
+  if (value) el.replaceChildren(...keycaps(value));
+  else el.textContent = "Set a shortcut";
   el.classList.toggle("empty", !value);
 }
 
@@ -65,9 +77,10 @@ function renderSidebar() {
     ...draft.profiles.map((p) => {
       const b = document.createElement("button");
       b.className = "side-item" + (p.id === selected ? " active" : "");
-      b.innerHTML = `<span class="name"></span><span class="hk"></span>`;
+      b.innerHTML = `<span class="name"></span><span class="keys"></span>`;
       b.querySelector(".name").textContent = p.name || "Untitled";
-      b.querySelector(".hk").textContent = prettyHotkey(p.hotkey);
+      b.querySelector(".keys").replaceChildren(...(p.hotkey ? keycaps(p.hotkey) : []));
+      b.title = p.hotkey ? `${p.name} — ${prettyHotkey(p.hotkey)}` : p.name;
       b.addEventListener("click", () => select(p.id));
       return b;
     })
@@ -102,8 +115,8 @@ function renderProfile() {
   $("pRepoField").classList.toggle("hidden", p.backend !== "claude-code");
   $("pBackendHelp").textContent =
     p.backend === "api"
-      ? "Faster. Uses your API key (billed per use)."
-      : "Uses your Claude subscription through Claude Code. Takes a few seconds to start.";
+      ? "Faster. Uses your API key, billed per use."
+      : "Uses your Claude subscription. A few seconds to start.";
   renderFiles(p);
 }
 
@@ -394,11 +407,18 @@ window.addEventListener("beforeunload", (e) => {
 
 // ---------------------------------------------------------------- init
 
-(async () => {
+async function load() {
   data = await invoke("get_settings");
   mac = data.mac;
   draft = structuredClone(data.settings);
   savedJson = JSON.stringify(draft);
-  select(draft.profiles[0]?.id ?? "general");
+  const keep = selected === "general" || draft.profiles.some((p) => p.id === selected);
+  select(keep ? selected : draft.profiles[0]?.id ?? "general");
   updateSaveBar();
-})();
+}
+
+// The window is hidden, not destroyed, when closed: when it comes back, pick up changes
+// made elsewhere (popup, tray), unless the user has edits in progress here.
+window.__TAURI__.event.listen("settings-shown", () => { if (!dirty()) load(); });
+
+load();
