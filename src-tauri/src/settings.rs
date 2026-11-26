@@ -61,6 +61,8 @@ pub struct AppSettings {
     pub claude_path: String,
     /// "paste" = through the clipboard (fast, restored afterwards); "type" = simulated keystrokes.
     pub insert_method: String,
+    /// Check GitHub releases in the background and tell the user when a new version is out.
+    pub check_updates: bool,
     pub last_profile_id: String,
     pub profiles: Vec<Profile>,
 }
@@ -72,6 +74,7 @@ impl Default for AppSettings {
             launcher_hotkey: "Ctrl+Alt+K".into(),
             claude_path: "claude".into(),
             insert_method: "paste".into(),
+            check_updates: true,
             last_profile_id: "translate".into(),
             profiles: vec![
                 Profile {
@@ -134,7 +137,51 @@ pub fn config_dir() -> PathBuf {
                 })
         })
         .unwrap_or_else(|| PathBuf::from("."));
-    base.join("Heyo")
+    base.join(APP_DIR)
+}
+
+const APP_DIR: &str = "Hoppy";
+/// Names this app had before, newest first: their settings and API key are carried over once.
+const OLD_NAMES: &[&str] = &["Heyo", "TinyClaude"];
+
+/// First launch under the new name: copy settings, conversations and the API key from an older name.
+fn migrate_from_old_names() {
+    let dir = config_dir();
+    if !dir.join("settings.json").exists() {
+        let parent = dir.parent().map(PathBuf::from).unwrap_or_default();
+        if let Some(old) = OLD_NAMES
+            .iter()
+            .map(|n| parent.join(n))
+            .find(|d| d.join("settings.json").exists())
+        {
+            let _ = fs::create_dir_all(&dir);
+            let _ = fs::copy(old.join("settings.json"), dir.join("settings.json"));
+            if let Ok(entries) = fs::read_dir(old.join("conversations")) {
+                let _ = fs::create_dir_all(dir.join("conversations"));
+                for e in entries.flatten() {
+                    let _ = fs::copy(e.path(), dir.join("conversations").join(e.file_name()));
+                }
+            }
+            crate::log(&format!("settings carried over from {}", old.display()));
+        }
+    }
+
+    let has_key = key_entry()
+        .and_then(|e| e.get_password().ok())
+        .is_some_and(|k| !k.is_empty());
+    if !has_key {
+        let old_key = OLD_NAMES.iter().find_map(|n| {
+            keyring::Entry::new(n, "anthropic-api-key")
+                .ok()?
+                .get_password()
+                .ok()
+                .filter(|k| !k.is_empty())
+        });
+        if let (Some(k), Some(entry)) = (old_key, key_entry()) {
+            let _ = entry.set_password(&k);
+            crate::log("API key carried over from the previous app name");
+        }
+    }
 }
 
 pub fn settings_path() -> PathBuf {
@@ -142,6 +189,7 @@ pub fn settings_path() -> PathBuf {
 }
 
 pub fn load() -> AppSettings {
+    migrate_from_old_names();
     let path = settings_path();
     if let Ok(text) = fs::read_to_string(&path) {
         match serde_json::from_str::<AppSettings>(&text) {
@@ -170,7 +218,7 @@ pub fn save(s: &AppSettings) -> Result<(), String> {
 // ---------- API key (OS keychain, falls back to ANTHROPIC_API_KEY) ----------
 
 fn key_entry() -> Option<keyring::Entry> {
-    keyring::Entry::new("Heyo", "anthropic-api-key").ok()
+    keyring::Entry::new(APP_DIR, "anthropic-api-key").ok()
 }
 
 pub fn api_key() -> Option<String> {

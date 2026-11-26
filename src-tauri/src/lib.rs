@@ -1,4 +1,4 @@
-//! Heyo: press a shortcut anywhere, a tiny popup opens on a "project" profile,
+//! Hoppy: press a shortcut anywhere, a tiny popup opens on a "project" profile,
 //! you type, Claude answers, and the answer is written into the app you were in.
 
 mod claude;
@@ -6,6 +6,7 @@ mod focus;
 mod inject;
 mod mouse;
 mod settings;
+mod updates;
 
 use serde::Serialize;
 use settings::{AppSettings, Profile};
@@ -34,7 +35,7 @@ pub(crate) fn log(line: &str) {
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(dir.join("heyo.log"))
+        .open(dir.join("hoppy.log"))
     {
         let secs = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -66,8 +67,12 @@ struct AppState {
     cancel: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     /// Set while we hide the popup on purpose (insert), so the blur handler leaves things alone.
     inserting: AtomicBool,
+    /// Set while the OS voice-typing panel is open over the popup, so its focus changes don't close it.
+    dictating: AtomicBool,
     opened_at: Mutex<Instant>,
     placement: Mutex<Option<Placement>>,
+    /// A newer release found on GitHub, waiting for the user to install it.
+    pending_update: Mutex<Option<tauri_plugin_updater::Update>>,
 }
 
 /// Where the popup sits, in physical pixels. When it is above the caret, it grows upward
@@ -238,6 +243,7 @@ fn popup(app: &AppHandle) -> WebviewWindow {
 async fn open_popup(app: &AppHandle, profile_id: String) {
     let state = app.state::<AppState>();
     let win = popup(app);
+    state.dictating.store(false, Ordering::SeqCst);
 
     // Same shortcut again while open = close.
     if win.is_visible().unwrap_or(false) {
@@ -353,6 +359,9 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
 
 fn hide_popup_inner(app: &AppHandle) {
     cancel_inner(app);
+    app.state::<AppState>()
+        .dictating
+        .store(false, Ordering::SeqCst);
     let _ = popup(app).hide();
 }
 
@@ -387,6 +396,10 @@ struct PopupState {
     selection: String,
     history: Vec<claude::Message>,
     mac: bool,
+    /// The OS offers voice typing we can start from the mic button (Windows: Win+H).
+    dictation: bool,
+    /// Version of an update waiting to be installed (shown as a banner).
+    update: Option<String>,
     /// Where the popup springs out of: caret x in the window, and whether it sits above the caret.
     origin_x: f64,
     above: bool,
@@ -420,6 +433,8 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
         selection: session.selection.clone(),
         history,
         mac: cfg!(target_os = "macos"),
+        dictation: cfg!(target_os = "windows"),
+        update: updates::pending_version(app),
         origin_x: placement.map_or(SHADOW_MARGIN + 16.0, |p| p.origin_x),
         above: placement.is_none_or(|p| p.above),
     }
@@ -491,6 +506,33 @@ async fn insert_text(app: AppHandle, text: String) -> Result<(), String> {
 fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
     use tauri_plugin_clipboard_manager::ClipboardExt;
     app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
+/// Mic button: opens the OS voice typing on the popup's text field (Windows: Win+H).
+/// Pressing it again toggles it off. The transcription is done by the OS, not by Hoppy.
+#[tauri::command]
+async fn start_dictation(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let state = app.state::<AppState>();
+        state.dictating.store(true, Ordering::SeqCst);
+        let win = popup(&app);
+        let _ = win.set_focus();
+        focus::bring_to_front(&win);
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        inject::voice_typing_shortcut(&app).await
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Err("Voice typing is only available on Windows for now.".into())
+    }
+}
+
+/// "Install and restart" in the popup's update banner.
+#[tauri::command]
+async fn install_update(app: AppHandle) {
+    updates::install_pending(&app).await;
 }
 
 #[tauri::command]
@@ -640,7 +682,7 @@ fn open_settings_window(app: &AppHandle) {
         return;
     }
     match WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
-        .title("Heyo")
+        .title("Hoppy")
         .inner_size(900.0, 640.0)
         .min_inner_size(760.0, 520.0)
         .center()
@@ -680,10 +722,21 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?)?;
+    let update_label = match updates::pending_version(app) {
+        Some(v) => format!("Install update v{v}…"),
+        None => format!("Check for updates (v{})", app.package_info().version),
+    };
+    menu.append(&MenuItem::with_id(
+        app,
+        "update",
+        update_label,
+        true,
+        None::<&str>,
+    )?)?;
     menu.append(&MenuItem::with_id(
         app,
         "quit",
-        "Quit Heyo",
+        "Quit Hoppy",
         true,
         None::<&str>,
     )?)?;
@@ -708,6 +761,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -727,8 +781,10 @@ pub fn run() {
             shortcuts: Mutex::new(HashMap::new()),
             cancel: Mutex::new(None),
             inserting: AtomicBool::new(false),
+            dictating: AtomicBool::new(false),
             opened_at: Mutex::new(Instant::now()),
             placement: Mutex::new(None),
+            pending_update: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             popup_state,
@@ -737,6 +793,8 @@ pub fn run() {
             cancel,
             insert_text,
             copy_text,
+            start_dictation,
+            install_update,
             new_conversation,
             hide_popup,
             resize_popup,
@@ -757,12 +815,21 @@ pub fn run() {
             let handle = app.handle().clone();
             let menu = build_tray_menu(&handle)?;
             let mut tray = TrayIconBuilder::with_id("main")
-                .tooltip("Heyo")
+                .tooltip("Hoppy")
                 .menu(&menu)
                 .on_menu_event(|app, event| {
                     let id = event.id().as_ref();
                     if id == "settings" {
                         open_settings_window(app);
+                    } else if id == "update" {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if updates::pending_version(&app).is_some() {
+                                updates::install_pending(&app).await
+                            } else {
+                                updates::check(&app, true).await
+                            }
+                        });
                     } else if id == "quit" {
                         app.exit(0);
                     } else if let Some(pid) = id.strip_prefix("profile:") {
@@ -783,7 +850,10 @@ pub fn run() {
                     let st = h2.state::<AppState>();
                     let just_opened =
                         st.opened_at.lock().unwrap().elapsed() < Duration::from_millis(400);
-                    if !st.inserting.load(Ordering::SeqCst) && !just_opened {
+                    if !st.inserting.load(Ordering::SeqCst)
+                        && !st.dictating.load(Ordering::SeqCst)
+                        && !just_opened
+                    {
                         hide_popup_inner(&h2);
                     }
                 }
@@ -798,10 +868,11 @@ pub fn run() {
             if first_run || !errors.is_empty() {
                 open_settings_window(&handle);
             }
+            updates::start_background_checks(&handle);
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("failed to start Heyo")
+        .expect("failed to start Hoppy")
         .run(|_app, event| {
             // Stay in the tray when the settings window is closed.
             if let RunEvent::ExitRequested {

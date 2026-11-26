@@ -1,4 +1,4 @@
-// Heyo settings: profiles on the left, one form on the right, one Save button.
+// Hoppy settings: profiles on the left, one form on the right, one Save button.
 const { invoke } = window.__TAURI__.core;
 const $ = (id) => document.getElementById(id);
 
@@ -130,6 +130,7 @@ function renderGeneral() {
   $("gClaudePath").value = draft.claudePath;
   setSeg($("gInsert"), draft.insertMethod);
   $("gAutostart").checked = data.autostart;
+  $("gCheckUpdates").checked = draft.checkUpdates;
   $("gConfigPath").textContent = "Settings file: " + data.configPath;
   renderKeyStatus(data.apiKeySource);
 }
@@ -222,6 +223,7 @@ $("deleteProfile").addEventListener("click", () => {
 $("generalBtn").addEventListener("click", () => select("general"));
 $("gClaudePath").addEventListener("input", (e) => { draft.claudePath = e.target.value; updateSaveBar(); });
 onSeg($("gInsert"), (v) => { draft.insertMethod = v; updateSaveBar(); });
+$("gCheckUpdates").addEventListener("change", (e) => { draft.checkUpdates = e.target.checked; updateSaveBar(); });
 $("gLauncherClear").addEventListener("click", () => {
   draft.launcherHotkey = "";
   setHotkeyBtn($("gLauncher"), "");

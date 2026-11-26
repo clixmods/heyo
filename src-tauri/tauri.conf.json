@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Heyo",
-  "version": "0.1.0",
-  "identifier": "com.clixmods.heyo",
+  "productName": "Hoppy",
+  "version": "0.2.0",
+  "identifier": "com.clixmods.hoppy",
   "build": {
     "frontendDist": "../ui"
   },
@@ -13,7 +13,7 @@
       {
         "label": "popup",
         "url": "index.html",
-        "title": "Heyo",
+        "title": "Hoppy",
         "width": 640,
         "height": 160,
         "decorations": false,
@@ -42,6 +42,16 @@
       "icons/icon.ico"
     ],
     "shortDescription": "Summon AI anywhere with a shortcut or a mouse button",
-    "category": "Productivity"
+    "category": "Productivity",
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU4RDg5NzVFQ0NDREQzQkIKUldTNzA4M01YcGZZV0ZZUjVURUlRRW1HTVVYTVVPTElteXdDZkpaQzJxVDJRMStrbnFWOEExLy8K",
+      "endpoints": ["https://github.com/clixmods/hoppy/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

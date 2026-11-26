@@ -2,7 +2,7 @@
 
 Guidance for AI coding agents (Claude Code and others) working on this repository. Humans: see [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## What Heyo is
+## What Hoppy is
 
 A tray app: a global shortcut (keys or a mouse button) opens a small popup at the user's text caret, sends the typed text (plus the selection) to an AI engine with the profile's instructions, then types the answer back into the app the user was in, or shows it (chat mode).
 
@@ -26,10 +26,11 @@ There are no automated tests yet; verify by running the app.
 | File | Responsibility |
 |---|---|
 | `src-tauri/src/lib.rs` | app setup, shortcut registration (`register_shortcuts`, `parse_shortcut`), `trigger` → `open_popup`, popup placement (`Placement`, `position_popup`, `resize_popup`), tray menu, all `#[tauri::command]`s |
-| `src-tauri/src/settings.rs` | `AppSettings` / `Profile` (serde camelCase, JSON in the OS config dir `Heyo/`), defaults, API key in the OS keychain (`keyring`) |
+| `src-tauri/src/settings.rs` | `AppSettings` / `Profile` (serde camelCase, JSON in the OS config dir `Hoppy/`), defaults, API key in the OS keychain (`keyring`) |
 | `src-tauri/src/claude.rs` | engines: Claude Code CLI (`claude -p --output-format json`) and the Anthropic Messages API; system prompt assembly; per-profile conversation files |
 | `src-tauri/src/inject.rs` | capture selection (Ctrl/Cmd+C, Windows clipboard sequence number), insert text (paste with clipboard restore, or typed), modifier release |
 | `src-tauri/src/focus.rs` | remember/restore the foreground app per OS; `caret_rect` (Win32 GUI thread info, then MSAA `OBJID_CARET`) |
+| `src-tauri/src/updates.rs` | update checks against the GitHub release's `latest.json` (tauri-plugin-updater); never installs without the user's click |
 | `src-tauri/src/mouse.rs` | mouse-button shortcuts via a Windows `WH_MOUSE_LL` hook (swallows the bound click) |
 | `ui/index.html`, `popup.js`, `popup.css` | popup window |
 | `ui/settings.html`, `settings.js`, `settings.css` | settings window (profiles editor, shortcut recorder) |
@@ -38,9 +39,9 @@ There are no automated tests yet; verify by running the app.
 ## Conventions
 
 - **Cross-platform**: OS-specific code goes behind `#[cfg(target_os = ...)]` with a working fallback for the other platforms (see `focus.rs`, `mouse.rs`). Windows is the primary target; never break macOS/Linux compilation.
-- **Speed matters**: the popup must appear in well under 200 ms after the shortcut. Don't add blocking work to `open_popup`; measure with the timing line it writes to `heyo.log`.
+- **Speed matters**: the popup must appear in well under 200 ms after the shortcut. Don't add blocking work to `open_popup`; measure with the timing line it writes to `hoppy.log`.
 - **Privacy**: never log user text, selections or answers; never write the API key to disk or logs. The log is for timings and errors.
-- **No telemetry, no network calls** other than the chosen engine.
+- **No telemetry, no network calls** other than the chosen engine and the update check (GitHub releases, can be turned off in Settings).
 - User-facing strings: English, sentence case, short. Errors say what happened and what to do.
 - Settings JSON is user-editable: keep fields backward compatible (`#[serde(default)]`).
 - Keep dependencies minimal; prefer the Tauri plugins already in `Cargo.toml`.

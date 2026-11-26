@@ -32,7 +32,7 @@ jobs:
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           TAG="v$VERSION"
           if ! gh release view "$TAG" > /dev/null 2>&1; then
-            gh release create "$TAG" --target "$GITHUB_SHA" --title "Heyo $TAG" --notes-file .github/release-notes.md
+            gh release create "$TAG" --target "$GITHUB_SHA" --title "Hoppy $TAG" --notes-file .github/release-notes.md
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)" >> "$GITHUB_OUTPUT"
@@ -82,9 +82,14 @@ jobs:
 
       - run: npm ci
 
+      # Signs the update bundles and publishes latest.json, which the app reads to offer updates.
+      # Secrets: TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD (see CONTRIBUTING.md).
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          includeUpdaterJson: true
           args: ${{ matrix.args }}
