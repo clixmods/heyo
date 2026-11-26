@@ -117,6 +117,7 @@ html, body { background: transparent; overflow: hidden; }
 }
 .sel-label { color: var(--accent); font-weight: 600; flex: none; }
 .sel-text { color: var(--text-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.shot-icon { width: 14px; height: 14px; color: var(--accent); flex: none; }
 
 .input-row { display: flex; align-items: flex-start; gap: 6px; padding: 6px 10px 4px 16px; }
 .input-row textarea { flex: 1; }
@@ -158,6 +159,18 @@ textarea:disabled { opacity: 0.55; }
   0%, 100% { opacity: 0.35; transform: scale(0.85); }
   50% { opacity: 1; transform: scale(1); }
 }
+
+/* Recording: a steady red dot, the universal "mic is on" sign. */
+.listening #listenText { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rec {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+.icon-btn.mic[aria-pressed="true"] { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
 
 .error {
   margin: 0 16px 8px;
@@ -209,3 +222,17 @@ textarea:disabled { opacity: 0.55; }
   background: color-mix(in srgb, var(--bg-soft) 45%, transparent);
 }
 .hints span { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ---------- translucent style (Settings → Popup window) ----------
+   The OS blurs what's behind the window (Acrylic / vibrancy); the panel fills the window,
+   lets that blur show through, and leaves the shadow and rounded corners to the OS. */
+body.glass .panel {
+  margin: 0;
+  border-radius: 8px;
+  border-color: var(--line);
+  box-shadow: none;
+  background: color-mix(in srgb, var(--bg) 58%, transparent);
+}
+body.glass .menu,
+body.glass .chip:not(.primary) { background: color-mix(in srgb, var(--bg-elev) 70%, transparent); }
+body.glass .hints { background: transparent; }

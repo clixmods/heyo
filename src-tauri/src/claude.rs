@@ -102,23 +102,34 @@ pub async fn ask(
     p: &Profile,
     text: &str,
     selection: &str,
+    screenshot: Option<&[u8]>,
 ) -> Result<String, String> {
     let mut conv = if p.keep_history {
         load_conversation(&p.id)
     } else {
         Conversation::default()
     };
-    let user = user_message(text, selection);
+    let mut user = user_message(text, selection);
+    if user.is_empty() && screenshot.is_some() {
+        user = "Apply your instructions to what's on my screen.".into();
+    }
     if user.is_empty() {
         return Err("Empty message.".into());
     }
     let system = system_prompt(p);
 
     let reply = if p.backend == BACKEND_API {
-        ask_api(p, &system, &conv.messages, &user).await?
+        ask_api(p, &system, &conv.messages, &user, screenshot).await?
     } else {
-        let (reply, session) =
-            ask_claude_code(settings, p, &system, conv.session_id.as_deref(), &user).await?;
+        let (reply, session) = ask_claude_code(
+            settings,
+            p,
+            &system,
+            conv.session_id.as_deref(),
+            &user,
+            screenshot,
+        )
+        .await?;
         conv.session_id = session;
         reply
     };
@@ -139,18 +150,48 @@ pub async fn ask(
 
 // ---------------------------------------------------------------- Claude Code CLI
 
+/// A file deleted when dropped (screenshots handed to the CLI).
+struct TempFile(std::path::PathBuf);
+
+impl Drop for TempFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
+}
+
 async fn ask_claude_code(
     settings: &AppSettings,
     p: &Profile,
     system: &str,
     session: Option<&str>,
     user: &str,
+    screenshot: Option<&[u8]>,
 ) -> Result<(String, Option<String>), String> {
     let exe = if settings.claude_path.trim().is_empty() {
         "claude"
     } else {
         settings.claude_path.trim()
     };
+    let workdir = settings::config_dir().join("workdir");
+    let _ = fs::create_dir_all(&workdir);
+
+    // The CLI reads images with its Read tool: hand it a temporary file, deleted when we're done.
+    let shot = match screenshot {
+        Some(bytes) => {
+            let path = workdir.join(format!("screenshot-{}.jpg", uuid::Uuid::new_v4().simple()));
+            fs::write(&path, bytes).map_err(|e| format!("Couldn't save the screenshot: {e}"))?;
+            Some(TempFile(path))
+        }
+        None => None,
+    };
+    let user = match &shot {
+        Some(f) => format!(
+            "{user}\n\n(A screenshot of my screen, taken when I asked, is at {}. Read it for context.)",
+            f.0.display()
+        ),
+        None => user.to_string(),
+    };
+
     let mut cmd = tokio::process::Command::new(exe);
     cmd.args(["-p", "--output-format", "json", "--model", &p.model]);
     if !p.effort.is_empty() {
@@ -166,12 +207,23 @@ async fn ask_claude_code(
             "--tools",
             "Read,Glob,Grep",
         ]);
+        if shot.is_some() {
+            cmd.arg("--add-dir").arg(&workdir);
+        }
     } else {
-        // Plain mode: our prompt only, no tools, no user plugins/hooks → faster and predictable.
-        let dir = settings::config_dir().join("workdir");
-        let _ = fs::create_dir_all(&dir);
-        cmd.current_dir(dir)
-            .args(["--system-prompt", system, "--tools", "", "--safe-mode"]);
+        // Plain mode: our prompt only, no user plugins/hooks → faster and predictable.
+        // No tools, except Read when there's a screenshot to look at.
+        let tools = if shot.is_some() { "Read" } else { "" };
+        cmd.current_dir(&workdir).args([
+            "--system-prompt",
+            system,
+            "--tools",
+            tools,
+            "--safe-mode",
+        ]);
+    }
+    if shot.is_some() {
+        cmd.args(["--allowedTools", "Read"]);
     }
 
     match (p.keep_history, session) {
@@ -256,7 +308,9 @@ async fn ask_api(
     system: &str,
     history: &[Message],
     user: &str,
+    screenshot: Option<&[u8]>,
 ) -> Result<String, String> {
+    use base64::Engine;
     let key =
         settings::api_key().ok_or("No API key: add one in Settings (or set ANTHROPIC_API_KEY).")?;
 
@@ -264,7 +318,21 @@ async fn ask_api(
         .iter()
         .map(|m| json!({ "role": m.role, "content": m.content }))
         .collect();
-    messages.push(json!({ "role": "user", "content": user }));
+    let content = match screenshot {
+        Some(jpeg) => json!([
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": base64::engine::general_purpose::STANDARD.encode(jpeg),
+                },
+            },
+            { "type": "text", "text": user },
+        ]),
+        None => json!(user),
+    };
+    messages.push(json!({ "role": "user", "content": content }));
 
     let mut body = json!({
         "model": p.model,

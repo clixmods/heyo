@@ -167,6 +167,27 @@ pub async fn restore(token: Option<&str>) {
     tokio::time::sleep(Duration::from_millis(150)).await;
 }
 
+/// Windows 11: ask DWM to round the corners of our borderless window (used with the OS blur,
+/// where the panel fills the window). No-op elsewhere and on Windows 10.
+#[allow(unused_variables)]
+pub fn round_corners(window: &tauri::WebviewWindow, round: bool) {
+    #[cfg(target_os = "windows")]
+    if let Ok(h) = window.hwnd() {
+        use windows_sys::Win32::Graphics::Dwm::{
+            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DEFAULT, DWMWCP_ROUND, DwmSetWindowAttribute,
+        };
+        let pref = if round { DWMWCP_ROUND } else { DWMWCP_DEFAULT };
+        unsafe {
+            DwmSetWindowAttribute(
+                h.0 as _,
+                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                &pref as *const _ as *const core::ffi::c_void,
+                std::mem::size_of_val(&pref) as u32,
+            );
+        }
+    }
+}
+
 /// Brings one of our own windows to the front (Windows needs a nudge, other OSes are fine with set_focus).
 #[allow(unused_variables)]
 pub fn bring_to_front(window: &tauri::WebviewWindow) {
