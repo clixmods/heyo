@@ -1,4 +1,4 @@
-// Hoppy popup: type, Enter, done.
+// Hoppy popup: type (or speak), Enter, done.
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
@@ -7,14 +7,15 @@ const els = {
   panel: $("panel"), profileBtn: $("profileBtn"), profileName: $("profileName"), profileHotkey: $("profileHotkey"),
   modelTag: $("modelTag"), newConvBtn: $("newConvBtn"), settingsBtn: $("settingsBtn"), menu: $("menu"),
   history: $("history"), selection: $("selection"), selText: $("selText"), selClear: $("selClear"),
+  shot: $("shot"), shotClear: $("shotClear"),
   input: $("input"), status: $("status"), statusText: $("statusText"), error: $("error"),
   answer: $("answer"), answerText: $("answerText"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
   insertKbd: $("insertKbd"), hints: $("hints"), micBtn: $("micBtn"),
-  insertKbd: $("insertKbd"), hints: $("hints"),
+  listening: $("listening"), listenText: $("listenText"), listenKbd: $("listenKbd"),
   update: $("update"), updateText: $("updateText"), updateBtn: $("updateBtn"),
 };
 
-let state = null; // { profile, profiles, selection, history, mac }
+let state = null; // PopupState from Rust: { profile, profiles, selection, screenshot, history, look, … }
 let busy = false;
 let lastAnswer = "";
 let menuIndex = -1;
@@ -27,6 +28,7 @@ const MODEL_LABELS = {
 };
 
 const mod = () => (state?.mac ? "⌘" : "Ctrl");
+const look = () => state?.look ?? { showHints: true, showModel: true, translucent: false };
 
 const MOUSE_LABELS = { mouse4: "Mouse 4", mouse5: "Mouse 5", mousemiddle: "Middle click" };
 
@@ -43,6 +45,7 @@ function isChat() { return state?.profile?.output === "chat"; }
 // ---------------------------------------------------------------- render
 
 function render() {
+  document.body.classList.toggle("glass", !!look().translucent);
   const p = state?.profile;
   if (!p) {
     els.profileName.textContent = "No profile";
@@ -54,19 +57,22 @@ function render() {
   els.profileHotkey.textContent = prettyHotkey(p.hotkey);
   const engine = p.backend === "api" ? "API" : "Claude Code";
   els.modelTag.textContent = [MODEL_LABELS[p.model] ?? p.model, p.effort, engine].filter(Boolean).join(" · ");
+  els.modelTag.classList.toggle("hidden", !look().showModel);
   els.newConvBtn.classList.toggle("hidden", !p.keepHistory);
   els.micBtn.classList.toggle("hidden", !state.dictation);
   els.update.classList.toggle("hidden", !state.update);
   els.updateText.textContent = state.update ? `Hoppy v${state.update} is available` : "";
 
-  // Selection chip
+  // Selection and screenshot chips
   const sel = (state.selection || "").trim();
   els.selection.classList.toggle("hidden", !sel);
   els.selText.textContent = sel.replace(/\s+/g, " ").slice(0, 140);
   els.selText.title = sel.slice(0, 1000);
+  els.shot.classList.toggle("hidden", !state.screenshot);
 
-  els.input.placeholder = sel
-    ? (isChat() ? "Ask about this text… (or just press ↵)" : "↵ to apply, or add instructions…")
+  const context = sel || state.screenshot;
+  els.input.placeholder = context
+    ? (isChat() ? "Ask about this… (or just press ↵)" : "↵ to apply, or add instructions…")
     : (isChat() ? "Ask anything…" : "Type your text, it gets written for you…");
 
   renderHistory();
@@ -97,10 +103,15 @@ function stripSelection(text) {
 }
 
 function renderHints() {
+  els.insertKbd.textContent = `${mod()} ↵`;
+  els.listenKbd.textContent = `${mod()} M`;
+  els.hints.classList.toggle("hidden", !look().showHints);
+  if (!look().showHints) return;
   const k = (t) => `<kbd>${t}</kbd>`;
   const items = [
     `${k("↵")} send`,
     `${k("⇧↵")} new line`,
+    `${k("↑↓")} previous`,
     `${k("Tab")} profile`,
   ];
   if (isChat()) {
@@ -110,7 +121,6 @@ function renderHints() {
   if (state?.dictation) items.push(`${k(mod() + " M")} dictate`);
   items.push(`${k("Esc")} close`);
   els.hints.innerHTML = items.map((h) => `<span>${h}</span>`).join("");
-  els.insertKbd.textContent = `${mod()} ↵`;
 }
 
 function renderMenu() {
@@ -164,7 +174,8 @@ function autosize() {
   els.input.style.height = Math.min(els.input.scrollHeight, 220) + "px";
 }
 
-// Resize the native window to the panel (+ the 14px shadow margin on each side).
+// Resize the native window to the panel. The solid style keeps a 14 px transparent margin
+// around the panel for its shadow; the translucent style fills the window (the OS draws the shadow).
 let fitQueued = false;
 function fit() {
   if (fitQueued) return;
@@ -172,42 +183,118 @@ function fit() {
   requestAnimationFrame(() => {
     fitQueued = false;
     autosize();
-    const h = Math.ceil(els.panel.getBoundingClientRect().height) + 28;
+    const margin = look().translucent ? 0 : 28;
+    const h = Math.ceil(els.panel.getBoundingClientRect().height) + margin;
     invoke("resize_popup", { height: h });
   });
 }
+
+// ---------------------------------------------------------------- input history (↑ / ↓)
+
+// What you sent before, newest first, kept on this computer only.
+const PAST_KEY = "hoppy.inputHistory";
+const PAST_MAX = 100;
+let past = loadPast();
+let pastIndex = -1; // -1 = the text being typed, not a past one
+let draftText = "";
+
+function loadPast() {
+  try { return JSON.parse(localStorage.getItem(PAST_KEY)) || []; } catch { return []; }
+}
+
+function rememberInput(text) {
+  text = text.trim();
+  if (!text) return;
+  past = [text, ...past.filter((t) => t !== text)].slice(0, PAST_MAX);
+  try { localStorage.setItem(PAST_KEY, JSON.stringify(past)); } catch { /* storage unavailable */ }
+  pastIndex = -1;
+}
+
+function recall(step) {
+  const next = pastIndex + step;
+  if (next < -1 || next >= past.length) return false;
+  if (pastIndex === -1) draftText = els.input.value;
+  pastIndex = next;
+  els.input.value = pastIndex === -1 ? draftText : past[pastIndex];
+  const end = els.input.value.length;
+  els.input.setSelectionRange(end, end);
+  fit();
+  return true;
+}
+
+// Only when the caret is on the first line (↑) or the last line (↓), so multi-line editing still works.
+function caretOnFirstLine() {
+  return !els.input.value.slice(0, els.input.selectionStart).includes("\n");
+}
+function caretOnLastLine() {
+  return !els.input.value.slice(els.input.selectionEnd).includes("\n");
+}
+
+// ---------------------------------------------------------------- dictation
+
+// Hoppy listens itself (Windows speech recognition, no OS panel): partial words show in the
+// "Listening…" line, finished phrases are typed into the field.
+let listening = false;
+
+function setListening(on) {
+  listening = on;
+  els.micBtn.setAttribute("aria-pressed", String(on));
+  els.listening.classList.toggle("hidden", !on);
+  els.listenText.textContent = "Listening…";
+  fit();
+}
+
+async function toggleListening() {
+  if (!state?.dictation || busy) return;
+  if (listening) {
+    invoke("stop_listening");
+    setListening(false);
+    return;
+  }
+  showError("");
+  setListening(true);
+  els.listenText.textContent = "Starting the microphone…";
+  try {
+    await invoke("start_listening");
+    if (listening) els.listenText.textContent = "Listening…";
+  } catch (e) {
+    setListening(false);
+    showError(String(e));
+  }
+  els.input.focus();
+}
+
+function insertAtCaret(text) {
+  const el = els.input;
+  const before = el.value.slice(0, el.selectionStart);
+  const after = el.value.slice(el.selectionEnd);
+  const sep = before && !/\s$/.test(before) ? " " : "";
+  el.value = before + sep + text + after;
+  const pos = (before + sep + text).length;
+  el.setSelectionRange(pos, pos);
+  fit();
+}
+
+listen("dictation-partial", (e) => {
+  if (listening) els.listenText.textContent = `Listening… ${e.payload}`;
+});
+listen("dictation-text", (e) => {
+  if (!listening) return;
+  insertAtCaret(e.payload);
+  els.listenText.textContent = "Listening…";
+});
+listen("dictation-stopped", () => { if (listening) setListening(false); });
 
 // ---------------------------------------------------------------- actions
 
 function reset() {
   els.input.value = "";
+  pastIndex = -1;
   showError("");
   showAnswer("");
   toggleMenu(false);
   setBusy(false);
-  setDictating(false);
-}
-
-// ---------------------------------------------------------------- voice typing
-
-// The OS does the transcription (Windows voice typing, Win+H) straight into the text field.
-// We can't see when it stops, so the button state is our best guess: it flips on each press.
-let dictating = false;
-
-function setDictating(on) {
-  dictating = on;
-  els.micBtn.setAttribute("aria-pressed", String(on));
-}
-
-async function toggleDictation() {
-  if (!state?.dictation || busy) return;
-  els.input.focus();
-  try {
-    await invoke("start_dictation");
-    setDictating(!dictating);
-  } catch (e) {
-    showError(String(e));
-  }
+  if (listening) setListening(false);
 }
 
 async function switchTo(id) {
@@ -228,32 +315,30 @@ function cycleProfile(step) {
 
 async function send() {
   if (busy || !state?.profile) return;
+  if (listening) { invoke("stop_listening"); setListening(false); }
   const text = els.input.value;
   const hasSel = !!(state.selection || "").trim();
-  if (!text.trim() && !hasSel) return;
+  if (!text.trim() && !hasSel && !state.screenshot) return;
 
+  rememberInput(text);
   showError("");
   showAnswer("");
   setBusy(true, isChat() ? "Thinking…" : "Writing…");
   try {
     const reply = await invoke("ask", { text, useSelection: hasSel });
     setBusy(false);
+    state.selection = "";
+    state.screenshot = false;
     if (!isChat()) {
       els.input.value = "";
-      state.selection = "";
       await invoke("insert_text", { text: reply });
       reset();
       return;
     }
     // Chat: keep the exchange on screen.
     els.input.value = "";
-    state.selection = "";
-    if (state.profile.keepHistory) {
-      state = await invoke("popup_state");
-      render();
-    } else {
-      render();
-    }
+    if (state.profile.keepHistory) state = await invoke("popup_state");
+    render();
     showAnswer(reply);
   } catch (e) {
     setBusy(false);
@@ -296,7 +381,7 @@ function close() {
 
 // ---------------------------------------------------------------- events
 
-els.input.addEventListener("input", fit);
+els.input.addEventListener("input", () => { pastIndex = -1; fit(); });
 
 document.addEventListener("keydown", (e) => {
   const cmd = state?.mac ? e.metaKey : e.ctrlKey;
@@ -305,6 +390,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
     if (busy) { invoke("cancel"); return; }
+    if (listening) { toggleListening(); return; }
     if (menuOpen) { toggleMenu(false); return; }
     close();
     return;
@@ -320,6 +406,10 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     switchTo(state.profiles[menuIndex].id);
     return;
+  }
+  if (document.activeElement === els.input && !e.shiftKey && !e.altKey && !cmd) {
+    if (e.key === "ArrowUp" && caretOnFirstLine() && recall(1)) { e.preventDefault(); return; }
+    if (e.key === "ArrowDown" && caretOnLastLine() && recall(-1)) { e.preventDefault(); return; }
   }
   if (e.key === "Tab") {
     e.preventDefault();
@@ -348,7 +438,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (cmd && e.key.toLowerCase() === "m") {
     e.preventDefault();
-    toggleDictation();
+    toggleListening();
     return;
   }
   if (e.key === "Enter" && !e.shiftKey && document.activeElement === els.input) {
@@ -362,7 +452,7 @@ els.settingsBtn.addEventListener("click", () => invoke("open_settings"));
 els.newConvBtn.addEventListener("click", newConversation);
 els.insertBtn.addEventListener("click", insertAnswer);
 els.copyBtn.addEventListener("click", copyAnswer);
-els.micBtn.addEventListener("click", toggleDictation);
+els.micBtn.addEventListener("click", toggleListening);
 els.updateBtn.addEventListener("click", () => {
   els.updateBtn.disabled = true;
   els.updateBtn.textContent = "Installing…";
@@ -373,6 +463,12 @@ els.selClear.addEventListener("click", () => {
   render();
   els.input.focus();
 });
+els.shotClear.addEventListener("click", () => {
+  invoke("drop_screenshot");
+  state.screenshot = false;
+  render();
+  els.input.focus();
+});
 
 listen("popup-open", (event) => {
   state = event.payload;
@@ -380,7 +476,6 @@ listen("popup-open", (event) => {
   render();
   setTimeout(() => els.input.focus(), 30);
 });
-
 
 window.addEventListener("focus", () => { if (!busy) els.input.focus(); });
 

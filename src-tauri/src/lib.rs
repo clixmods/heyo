@@ -5,7 +5,9 @@ mod claude;
 mod focus;
 mod inject;
 mod mouse;
+mod screenshot;
 mod settings;
+mod speech;
 mod updates;
 
 use serde::Serialize;
@@ -58,6 +60,8 @@ struct Session {
     profile_id: String,
     focus_token: Option<String>,
     selection: String,
+    /// JPEG of the screen, for profiles that attach a screenshot (sent with the first message).
+    screenshot: Option<Vec<u8>>,
 }
 
 struct AppState {
@@ -67,8 +71,6 @@ struct AppState {
     cancel: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     /// Set while we hide the popup on purpose (insert), so the blur handler leaves things alone.
     inserting: AtomicBool,
-    /// Set while the OS voice-typing panel is open over the popup, so its focus changes don't close it.
-    dictating: AtomicBool,
     opened_at: Mutex<Instant>,
     placement: Mutex<Option<Placement>>,
     /// A newer release found on GitHub, waiting for the user to install it.
@@ -87,8 +89,6 @@ struct Placement {
     min_y: i32,
     max_y: i32,
     scale: f64,
-    /// Caret x inside the window (logical px): the point the popup springs out of.
-    origin_x: f64,
 }
 
 impl Placement {
@@ -243,7 +243,6 @@ fn popup(app: &AppHandle) -> WebviewWindow {
 async fn open_popup(app: &AppHandle, profile_id: String) {
     let state = app.state::<AppState>();
     let win = popup(app);
-    state.dictating.store(false, Ordering::SeqCst);
 
     // Same shortcut again while open = close.
     if win.is_visible().unwrap_or(false) {
@@ -270,6 +269,19 @@ async fn open_popup(app: &AppHandle, profile_id: String) {
     } else {
         String::new()
     };
+    // The screen the user is on, taken before the popup covers it.
+    let screenshot = if profile.attach_screenshot && screenshot::AVAILABLE {
+        let point = caret
+            .map(|(x, y, _, _)| (x, y))
+            .or_else(|| app.cursor_position().ok().map(|c| (c.x as i32, c.y as i32)))
+            .unwrap_or_default();
+        tauri::async_runtime::spawn_blocking(move || screenshot::capture(point.0, point.1))
+            .await
+            .ok()
+            .flatten()
+    } else {
+        None
+    };
     let capture_ms = t0.elapsed().as_millis();
     {
         let mut s = state.session.lock().unwrap();
@@ -277,6 +289,7 @@ async fn open_popup(app: &AppHandle, profile_id: String) {
             profile_id: profile.id.clone(),
             focus_token,
             selection,
+            screenshot,
         };
     }
     remember_profile(app, &profile.id);
@@ -299,9 +312,19 @@ async fn open_popup(app: &AppHandle, profile_id: String) {
     ));
 }
 
-/// Transparent margin around the panel (room for its shadow) + the input's left padding, in logical px.
+/// Transparent margin around the panel (room for its CSS shadow), in logical px.
+/// The translucent style has none: the OS draws the shadow and the panel fills the window.
 const SHADOW_MARGIN: f64 = 14.0;
-const INPUT_INSET: f64 = 14.0 + 16.0;
+/// The input's left padding inside the panel, in logical px.
+const INPUT_PADDING: f64 = 16.0;
+
+fn popup_margin(app: &AppHandle) -> f64 {
+    if app.state::<AppState>().settings().popup.translucent {
+        0.0
+    } else {
+        SHADOW_MARGIN
+    }
+}
 
 /// Just above the text caret of the app you were typing in, with the input lined up on the caret.
 /// Below it when there's no room above; near the mouse when the caret can't be read.
@@ -327,18 +350,19 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
     let (wa_w, wa_h) = (wa.size.width as i32, wa.size.height as i32);
     let px = |v: f64| (v * scale).round() as i32;
 
+    let margin = popup_margin(app);
     let width = px(POPUP_WIDTH);
-    let left = (cx - px(INPUT_INSET)).min(wa_x + wa_w - width).max(wa_x);
+    let left = (cx - px(margin + INPUT_PADDING))
+        .min(wa_x + wa_w - width)
+        .max(wa_x);
     let gap = px(6.0);
     // Room for a typical popup (~180 px) above the caret?
     let above = cy - wa_y >= px(180.0);
     let edge = if above {
-        cy - gap + px(SHADOW_MARGIN)
+        cy - gap + px(margin)
     } else {
-        cy + ch + gap - px(SHADOW_MARGIN)
+        cy + ch + gap - px(margin)
     };
-    let origin_x =
-        ((cx - left) as f64 / scale).clamp(SHADOW_MARGIN + 6.0, POPUP_WIDTH - SHADOW_MARGIN - 6.0);
     let p = Placement {
         left,
         edge,
@@ -346,7 +370,6 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
         min_y: wa_y,
         max_y: wa_y + wa_h,
         scale,
-        origin_x,
     };
     *app.state::<AppState>().placement.lock().unwrap() = Some(p);
 
@@ -359,10 +382,32 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
 
 fn hide_popup_inner(app: &AppHandle) {
     cancel_inner(app);
-    app.state::<AppState>()
-        .dictating
-        .store(false, Ordering::SeqCst);
+    stop_listening_inner();
     let _ = popup(app).hide();
+}
+
+fn stop_listening_inner() {
+    tauri::async_runtime::spawn_blocking(speech::stop);
+}
+
+/// Applies the popup look that needs the native window: OS blur, native shadow, rounded corners.
+fn apply_popup_look(app: &AppHandle) {
+    use tauri::window::{Effect, EffectsBuilder};
+    let win = popup(app);
+    if app.state::<AppState>().settings().popup.translucent {
+        let effect = if cfg!(target_os = "macos") {
+            Effect::Popover
+        } else {
+            Effect::Acrylic
+        };
+        let _ = win.set_effects(EffectsBuilder::new().effect(effect).build());
+        let _ = win.set_shadow(true);
+        focus::round_corners(&win, true);
+    } else {
+        let _ = win.set_effects(None::<tauri::utils::config::WindowEffectsConfig>);
+        let _ = win.set_shadow(false);
+        focus::round_corners(&win, false);
+    }
 }
 
 fn cancel_inner(app: &AppHandle) {
@@ -396,19 +441,18 @@ struct PopupState {
     selection: String,
     history: Vec<claude::Message>,
     mac: bool,
-    /// The OS offers voice typing we can start from the mic button (Windows: Win+H).
+    /// The mic button can dictate on this OS.
     dictation: bool,
+    /// A screenshot is attached to the next message.
+    screenshot: bool,
     /// Version of an update waiting to be installed (shown as a banner).
     update: Option<String>,
-    /// Where the popup springs out of: caret x in the window, and whether it sits above the caret.
-    origin_x: f64,
-    above: bool,
+    look: settings::PopupLook,
 }
 
 fn popup_state_inner(app: &AppHandle) -> PopupState {
     let state = app.state::<AppState>();
     let s = state.settings();
-    let placement = *state.placement.lock().unwrap();
     let session = state.session.lock().unwrap();
     let profile = s
         .profile(&session.profile_id)
@@ -433,10 +477,10 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
         selection: session.selection.clone(),
         history,
         mac: cfg!(target_os = "macos"),
-        dictation: cfg!(target_os = "windows"),
+        dictation: speech::AVAILABLE,
+        screenshot: session.screenshot.is_some(),
         update: updates::pending_version(app),
-        origin_x: placement.map_or(SHADOW_MARGIN + 16.0, |p| p.origin_x),
-        above: placement.is_none_or(|p| p.above),
+        look: s.popup.clone(),
     }
 }
 
@@ -448,7 +492,7 @@ fn popup_state(app: AppHandle) -> PopupState {
 }
 
 #[tauri::command]
-fn switch_profile(app: AppHandle, id: String) -> PopupState {
+async fn switch_profile(app: AppHandle, id: String) -> PopupState {
     app.state::<AppState>().session.lock().unwrap().profile_id = id.clone();
     remember_profile(&app, &id);
     popup_state_inner(&app)
@@ -458,29 +502,43 @@ fn switch_profile(app: AppHandle, id: String) -> PopupState {
 async fn ask(app: AppHandle, text: String, use_selection: bool) -> Result<String, String> {
     let state = app.state::<AppState>();
     let settings = state.settings();
-    let (profile, selection) = {
+    let (profile, selection, screenshot) = {
         let mut session = state.session.lock().unwrap();
         let p = settings
             .profile(&session.profile_id)
             .cloned()
             .ok_or("Profile not found.")?;
-        // The selection goes with the first message only (and not at all if the user dismissed it).
+        // Selection and screenshot go with the first message only
+        // (and not at all if the user dismissed them).
         let sel = std::mem::take(&mut session.selection);
-        (p, if use_selection { sel } else { String::new() })
+        let shot = session.screenshot.take();
+        (p, if use_selection { sel } else { String::new() }, shot)
     };
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     *state.cancel.lock().unwrap() = Some(tx);
     let result = tokio::select! {
-        r = claude::ask(&settings, &profile, &text, &selection) => r,
+        r = claude::ask(&settings, &profile, &text, &selection, screenshot.as_deref()) => r,
         _ = rx => Err("Cancelled.".into()),
     };
     state.cancel.lock().unwrap().take();
-    if result.is_err() && !selection.is_empty() {
-        // Give the selection back so a retry still has it.
-        state.session.lock().unwrap().selection = selection;
+    if result.is_err() {
+        // Give them back so a retry still has them.
+        let mut session = state.session.lock().unwrap();
+        if !selection.is_empty() {
+            session.selection = selection;
+        }
+        if screenshot.is_some() {
+            session.screenshot = screenshot;
+        }
     }
     result
+}
+
+/// The ✕ on the "Screenshot attached" chip.
+#[tauri::command]
+fn drop_screenshot(app: AppHandle) {
+    app.state::<AppState>().session.lock().unwrap().screenshot = None;
 }
 
 #[tauri::command]
@@ -508,25 +566,18 @@ fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
     app.clipboard().write_text(text).map_err(|e| e.to_string())
 }
 
-/// Mic button: opens the OS voice typing on the popup's text field (Windows: Win+H).
-/// Pressing it again toggles it off. The transcription is done by the OS, not by Hoppy.
+/// Mic button on: listen and send the recognized text to the popup (no OS panel).
 #[tauri::command]
-async fn start_dictation(app: AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    {
-        let state = app.state::<AppState>();
-        state.dictating.store(true, Ordering::SeqCst);
-        let win = popup(&app);
-        let _ = win.set_focus();
-        focus::bring_to_front(&win);
-        tokio::time::sleep(Duration::from_millis(60)).await;
-        inject::voice_typing_shortcut(&app).await
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let _ = app;
-        Err("Voice typing is only available on Windows for now.".into())
-    }
+async fn start_listening(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || speech::start(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Mic button off.
+#[tauri::command]
+fn stop_listening() {
+    stop_listening_inner();
 }
 
 /// "Install and restart" in the popup's update banner.
@@ -536,7 +587,7 @@ async fn install_update(app: AppHandle) {
 }
 
 #[tauri::command]
-fn new_conversation(app: AppHandle) -> PopupState {
+async fn new_conversation(app: AppHandle) -> PopupState {
     let id = app
         .state::<AppState>()
         .session
@@ -549,12 +600,12 @@ fn new_conversation(app: AppHandle) -> PopupState {
 }
 
 #[tauri::command]
-fn hide_popup(app: AppHandle) {
+async fn hide_popup(app: AppHandle) {
     hide_popup_inner(&app);
 }
 
 #[tauri::command]
-fn resize_popup(app: AppHandle, height: f64) {
+async fn resize_popup(app: AppHandle, height: f64) {
     let win = popup(&app);
     let height = height.clamp(60.0, 720.0);
     let placement = *app.state::<AppState>().placement.lock().unwrap();
@@ -584,6 +635,7 @@ struct SettingsPayload {
     autostart: bool,
     config_path: String,
     mac: bool,
+    screenshot_available: bool,
 }
 
 #[tauri::command]
@@ -595,16 +647,18 @@ fn get_settings(app: AppHandle) -> SettingsPayload {
         autostart: app.autolaunch().is_enabled().unwrap_or(false),
         config_path: settings::settings_path().display().to_string(),
         mac: cfg!(target_os = "macos"),
+        screenshot_available: screenshot::AVAILABLE,
     }
 }
 
 /// Saves and re-binds shortcuts. Returns shortcut problems (the settings are saved anyway).
 #[tauri::command]
-fn save_settings(app: AppHandle, new_settings: AppSettings) -> Result<Vec<String>, String> {
+async fn save_settings(app: AppHandle, new_settings: AppSettings) -> Result<Vec<String>, String> {
     settings::save(&new_settings)?;
     *app.state::<AppState>().settings.lock().unwrap() = new_settings;
     let errors = register_shortcuts(&app);
     rebuild_tray_menu(&app);
+    apply_popup_look(&app);
     Ok(errors)
 }
 
@@ -670,26 +724,39 @@ async fn pick_folder(app: AppHandle) -> Option<String> {
 }
 
 #[tauri::command]
-fn open_settings(app: AppHandle) {
+// Async on purpose: on Windows, creating a window from a synchronous command deadlocks the
+// event loop and leaves a blank, frozen window.
+async fn open_settings(app: AppHandle) {
     open_settings_window(&app);
 }
 
+/// The settings window is created once, then only hidden and shown again: closing it hides it
+/// (see the CloseRequested handler), so reopening is instant and can't come back blank.
 fn open_settings_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("settings") {
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        // Settings may have changed elsewhere (tray, popup): the page reloads them if it has no unsaved edits.
+        let _ = w.emit("settings-shown", ());
         return;
     }
     match WebviewWindowBuilder::new(app, "settings", WebviewUrl::App("settings.html".into()))
         .title("Hoppy")
-        .inner_size(900.0, 640.0)
-        .min_inner_size(760.0, 520.0)
+        .inner_size(940.0, 680.0)
+        .min_inner_size(780.0, 540.0)
         .center()
         .build()
     {
         Ok(w) => {
             let _ = w.set_focus();
+            let w2 = w.clone();
+            w.on_window_event(move |e| {
+                if let WindowEvent::CloseRequested { api, .. } = e {
+                    api.prevent_close();
+                    let _ = w2.hide();
+                }
+            });
         }
         Err(e) => log(&format!("settings window: {e}")),
     }
@@ -781,7 +848,6 @@ pub fn run() {
             shortcuts: Mutex::new(HashMap::new()),
             cancel: Mutex::new(None),
             inserting: AtomicBool::new(false),
-            dictating: AtomicBool::new(false),
             opened_at: Mutex::new(Instant::now()),
             placement: Mutex::new(None),
             pending_update: Mutex::new(None),
@@ -793,7 +859,9 @@ pub fn run() {
             cancel,
             insert_text,
             copy_text,
-            start_dictation,
+            start_listening,
+            stop_listening,
+            drop_screenshot,
             install_update,
             new_conversation,
             hide_popup,
@@ -842,7 +910,8 @@ pub fn run() {
             }
             tray.build(app)?;
 
-            // Clicking elsewhere closes the popup (and cancels a pending request).
+            // Clicking elsewhere closes the popup (and cancels a pending request),
+            // unless the user wants it to float until Esc.
             let win = popup(&handle);
             let h2 = handle.clone();
             win.on_window_event(move |e| match e {
@@ -851,8 +920,8 @@ pub fn run() {
                     let just_opened =
                         st.opened_at.lock().unwrap().elapsed() < Duration::from_millis(400);
                     if !st.inserting.load(Ordering::SeqCst)
-                        && !st.dictating.load(Ordering::SeqCst)
                         && !just_opened
+                        && st.settings().popup.close_on_click_outside
                     {
                         hide_popup_inner(&h2);
                     }
@@ -864,6 +933,7 @@ pub fn run() {
                 _ => {}
             });
 
+            apply_popup_look(&handle);
             let errors = register_shortcuts(&handle);
             if first_run || !errors.is_empty() {
                 open_settings_window(&handle);

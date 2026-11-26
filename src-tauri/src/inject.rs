@@ -124,23 +124,6 @@ fn restore_clipboard(app: &AppHandle, saved: Option<String>) {
     }
 }
 
-/// Presses Win+H, which opens (or closes) Windows voice typing on the focused text field.
-/// Uses the virtual key code for H so it works whatever the keyboard layout.
-#[cfg(target_os = "windows")]
-pub async fn voice_typing_shortcut(app: &AppHandle) -> Result<(), String> {
-    const VK_H: u32 = 0x48;
-    on_main(app, || -> Result<(), String> {
-        let mut e = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-        e.key(Key::Meta, Direction::Press)
-            .map_err(|e| e.to_string())?;
-        let r = e.key(Key::Other(VK_H), Direction::Click);
-        e.key(Key::Meta, Direction::Release)
-            .map_err(|e| e.to_string())?;
-        r.map_err(|e| e.to_string())
-    })
-    .await
-}
-
 #[cfg(target_os = "windows")]
 fn clipboard_seq() -> Option<u32> {
     Some(unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() })
