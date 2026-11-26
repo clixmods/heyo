@@ -66,6 +66,8 @@ struct AppState {
     cancel: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     /// Set while we hide the popup on purpose (insert), so the blur handler leaves things alone.
     inserting: AtomicBool,
+    /// Set while the OS voice-typing panel is open over the popup, so its focus changes don't close it.
+    dictating: AtomicBool,
     opened_at: Mutex<Instant>,
     placement: Mutex<Option<Placement>>,
 }
@@ -238,6 +240,7 @@ fn popup(app: &AppHandle) -> WebviewWindow {
 async fn open_popup(app: &AppHandle, profile_id: String) {
     let state = app.state::<AppState>();
     let win = popup(app);
+    state.dictating.store(false, Ordering::SeqCst);
 
     // Same shortcut again while open = close.
     if win.is_visible().unwrap_or(false) {
@@ -353,6 +356,9 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
 
 fn hide_popup_inner(app: &AppHandle) {
     cancel_inner(app);
+    app.state::<AppState>()
+        .dictating
+        .store(false, Ordering::SeqCst);
     let _ = popup(app).hide();
 }
 
@@ -387,6 +393,8 @@ struct PopupState {
     selection: String,
     history: Vec<claude::Message>,
     mac: bool,
+    /// The OS offers voice typing we can start from the mic button (Windows: Win+H).
+    dictation: bool,
     /// Where the popup springs out of: caret x in the window, and whether it sits above the caret.
     origin_x: f64,
     above: bool,
@@ -420,6 +428,7 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
         selection: session.selection.clone(),
         history,
         mac: cfg!(target_os = "macos"),
+        dictation: cfg!(target_os = "windows"),
         origin_x: placement.map_or(SHADOW_MARGIN + 16.0, |p| p.origin_x),
         above: placement.is_none_or(|p| p.above),
     }
@@ -491,6 +500,27 @@ async fn insert_text(app: AppHandle, text: String) -> Result<(), String> {
 fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
     use tauri_plugin_clipboard_manager::ClipboardExt;
     app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
+/// Mic button: opens the OS voice typing on the popup's text field (Windows: Win+H).
+/// Pressing it again toggles it off. The transcription is done by the OS, not by Heyo.
+#[tauri::command]
+async fn start_dictation(app: AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let state = app.state::<AppState>();
+        state.dictating.store(true, Ordering::SeqCst);
+        let win = popup(&app);
+        let _ = win.set_focus();
+        focus::bring_to_front(&win);
+        tokio::time::sleep(Duration::from_millis(60)).await;
+        inject::voice_typing_shortcut(&app).await
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        Err("Voice typing is only available on Windows for now.".into())
+    }
 }
 
 #[tauri::command]
@@ -727,6 +757,7 @@ pub fn run() {
             shortcuts: Mutex::new(HashMap::new()),
             cancel: Mutex::new(None),
             inserting: AtomicBool::new(false),
+            dictating: AtomicBool::new(false),
             opened_at: Mutex::new(Instant::now()),
             placement: Mutex::new(None),
         })
@@ -737,6 +768,7 @@ pub fn run() {
             cancel,
             insert_text,
             copy_text,
+            start_dictation,
             new_conversation,
             hide_popup,
             resize_popup,
@@ -783,7 +815,10 @@ pub fn run() {
                     let st = h2.state::<AppState>();
                     let just_opened =
                         st.opened_at.lock().unwrap().elapsed() < Duration::from_millis(400);
-                    if !st.inserting.load(Ordering::SeqCst) && !just_opened {
+                    if !st.inserting.load(Ordering::SeqCst)
+                        && !st.dictating.load(Ordering::SeqCst)
+                        && !just_opened
+                    {
                         hide_popup_inner(&h2);
                     }
                 }
