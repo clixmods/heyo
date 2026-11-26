@@ -39,6 +39,7 @@ Example: a "Translate → EN" profile on your side mouse button. Write your mess
 - **Profiles = projects**: a system prompt, knowledge files, model and thinking effort.
 - **Two engines**: [Claude Code](https://claude.com/claude-code) (your Claude subscription, no API key) or the Anthropic API (faster, needs a key, stored in the OS keychain).
 - **Chat mode** with per-profile history, and read-only access to a code repository (Claude Code engine).
+- **Updates from GitHub**: Heyo tells you when a new version is out (banner in the popup, tray menu) and installs it when you click. Signed updates, nothing installed behind your back.
 - Lives in the system tray, tiny footprint (Rust + Tauri, no bundled browser).
 
 ## Profiles

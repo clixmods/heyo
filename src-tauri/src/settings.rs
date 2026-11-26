@@ -61,6 +61,8 @@ pub struct AppSettings {
     pub claude_path: String,
     /// "paste" = through the clipboard (fast, restored afterwards); "type" = simulated keystrokes.
     pub insert_method: String,
+    /// Check GitHub releases in the background and tell the user when a new version is out.
+    pub check_updates: bool,
     pub last_profile_id: String,
     pub profiles: Vec<Profile>,
 }
@@ -72,6 +74,7 @@ impl Default for AppSettings {
             launcher_hotkey: "Ctrl+Alt+K".into(),
             claude_path: "claude".into(),
             insert_method: "paste".into(),
+            check_updates: true,
             last_profile_id: "translate".into(),
             profiles: vec![
                 Profile {

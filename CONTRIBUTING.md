@@ -35,6 +35,8 @@ Thanks for helping! Heyo is open source under the [MIT license](LICENSE). Anyone
 
 Pushing to `main` without bumping the version rebuilds the installers of the current release in place.
 
+**Update signing.** Installed copies of Heyo check `latest.json` on the latest release and offer to update. Update bundles are signed: the public key is in `src-tauri/tauri.conf.json` (`plugins.updater.pubkey`), and the release workflow needs two repository secrets, `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Only the maintainer holds the private key; never commit it. If it's ever lost, generate a new pair with `npx tauri signer generate`, update the public key, and users will have to reinstall once manually.
+
 ## CI
 
 Every push to `develop`/`main` and every PR runs `cargo fmt --check`, `cargo clippy -- -D warnings` and a build on Windows, macOS and Linux (`.github/workflows/ci.yml`). Keep it green.

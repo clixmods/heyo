@@ -6,6 +6,7 @@ mod focus;
 mod inject;
 mod mouse;
 mod settings;
+mod updates;
 
 use serde::Serialize;
 use settings::{AppSettings, Profile};
@@ -70,6 +71,8 @@ struct AppState {
     dictating: AtomicBool,
     opened_at: Mutex<Instant>,
     placement: Mutex<Option<Placement>>,
+    /// A newer release found on GitHub, waiting for the user to install it.
+    pending_update: Mutex<Option<tauri_plugin_updater::Update>>,
 }
 
 /// Where the popup sits, in physical pixels. When it is above the caret, it grows upward
@@ -395,6 +398,8 @@ struct PopupState {
     mac: bool,
     /// The OS offers voice typing we can start from the mic button (Windows: Win+H).
     dictation: bool,
+    /// Version of an update waiting to be installed (shown as a banner).
+    update: Option<String>,
     /// Where the popup springs out of: caret x in the window, and whether it sits above the caret.
     origin_x: f64,
     above: bool,
@@ -429,6 +434,7 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
         history,
         mac: cfg!(target_os = "macos"),
         dictation: cfg!(target_os = "windows"),
+        update: updates::pending_version(app),
         origin_x: placement.map_or(SHADOW_MARGIN + 16.0, |p| p.origin_x),
         above: placement.is_none_or(|p| p.above),
     }
@@ -521,6 +527,12 @@ async fn start_dictation(app: AppHandle) -> Result<(), String> {
         let _ = app;
         Err("Voice typing is only available on Windows for now.".into())
     }
+}
+
+/// "Install and restart" in the popup's update banner.
+#[tauri::command]
+async fn install_update(app: AppHandle) {
+    updates::install_pending(&app).await;
 }
 
 #[tauri::command]
@@ -710,6 +722,17 @@ fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?)?;
+    let update_label = match updates::pending_version(app) {
+        Some(v) => format!("Install update v{v}…"),
+        None => format!("Check for updates (v{})", app.package_info().version),
+    };
+    menu.append(&MenuItem::with_id(
+        app,
+        "update",
+        update_label,
+        true,
+        None::<&str>,
+    )?)?;
     menu.append(&MenuItem::with_id(
         app,
         "quit",
@@ -738,6 +761,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
@@ -760,6 +784,7 @@ pub fn run() {
             dictating: AtomicBool::new(false),
             opened_at: Mutex::new(Instant::now()),
             placement: Mutex::new(None),
+            pending_update: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             popup_state,
@@ -769,6 +794,7 @@ pub fn run() {
             insert_text,
             copy_text,
             start_dictation,
+            install_update,
             new_conversation,
             hide_popup,
             resize_popup,
@@ -795,6 +821,15 @@ pub fn run() {
                     let id = event.id().as_ref();
                     if id == "settings" {
                         open_settings_window(app);
+                    } else if id == "update" {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if updates::pending_version(&app).is_some() {
+                                updates::install_pending(&app).await
+                            } else {
+                                updates::check(&app, true).await
+                            }
+                        });
                     } else if id == "quit" {
                         app.exit(0);
                     } else if let Some(pid) = id.strip_prefix("profile:") {
@@ -833,6 +868,7 @@ pub fn run() {
             if first_run || !errors.is_empty() {
                 open_settings_window(&handle);
             }
+            updates::start_background_checks(&handle);
             Ok(())
         })
         .build(tauri::generate_context!())

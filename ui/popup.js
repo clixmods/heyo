@@ -10,6 +10,8 @@ const els = {
   input: $("input"), status: $("status"), statusText: $("statusText"), error: $("error"),
   answer: $("answer"), answerText: $("answerText"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
   insertKbd: $("insertKbd"), hints: $("hints"), micBtn: $("micBtn"),
+  insertKbd: $("insertKbd"), hints: $("hints"),
+  update: $("update"), updateText: $("updateText"), updateBtn: $("updateBtn"),
 };
 
 let state = null; // { profile, profiles, selection, history, mac }
@@ -54,6 +56,8 @@ function render() {
   els.modelTag.textContent = [MODEL_LABELS[p.model] ?? p.model, p.effort, engine].filter(Boolean).join(" · ");
   els.newConvBtn.classList.toggle("hidden", !p.keepHistory);
   els.micBtn.classList.toggle("hidden", !state.dictation);
+  els.update.classList.toggle("hidden", !state.update);
+  els.updateText.textContent = state.update ? `Heyo v${state.update} is available` : "";
 
   // Selection chip
   const sel = (state.selection || "").trim();
@@ -359,6 +363,11 @@ els.newConvBtn.addEventListener("click", newConversation);
 els.insertBtn.addEventListener("click", insertAnswer);
 els.copyBtn.addEventListener("click", copyAnswer);
 els.micBtn.addEventListener("click", toggleDictation);
+els.updateBtn.addEventListener("click", () => {
+  els.updateBtn.disabled = true;
+  els.updateBtn.textContent = "Installing…";
+  invoke("install_update");
+});
 els.selClear.addEventListener("click", () => {
   state.selection = "";
   render();
