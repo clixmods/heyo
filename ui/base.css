@@ -129,3 +129,6 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* Profile mark: the profile's icon, or this dot when it has none. */
+.dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-grad); flex: none; }

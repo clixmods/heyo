@@ -16,6 +16,8 @@ pub const OUTPUT_CHAT: &str = "chat"; // the answer is shown in the popup
 pub struct Profile {
     pub id: String,
     pub name: String,
+    /// Icon shown in the popup and the settings sidebar (a name from `ui/icons.js`; empty = a dot).
+    pub icon: String,
     pub hotkey: String,
     pub backend: String,
     pub model: String,
@@ -40,6 +42,7 @@ impl Default for Profile {
         Self {
             id: uuid::Uuid::new_v4().simple().to_string()[..8].to_string(),
             name: "New profile".into(),
+            icon: String::new(),
             hotkey: String::new(),
             backend: BACKEND_CLAUDE_CODE.into(),
             model: "claude-opus-5-5".into(),
@@ -110,6 +113,7 @@ impl Default for AppSettings {
                 Profile {
                     id: "translate".into(),
                     name: "Translate → EN".into(),
+                    icon: "globe".into(),
                     hotkey: "Ctrl+Alt+T".into(),
                     instructions: "You are a translator. Translate the user's message (or the selected text) into natural, idiomatic English.\nKeep the tone, register, punctuation, emojis and formatting. Don't answer the message: translate it.".into(),
                     ..Default::default()
@@ -117,6 +121,7 @@ impl Default for AppSettings {
                 Profile {
                     id: "fix".into(),
                     name: "Fix writing".into(),
+                    icon: "pen".into(),
                     hotkey: "Ctrl+Alt+R".into(),
                     instructions: "Fix the spelling, grammar and punctuation of the text, in its original language.\nDon't change its meaning, tone or style. Don't answer the text: return it corrected.".into(),
                     ..Default::default()
@@ -124,6 +129,7 @@ impl Default for AppSettings {
                 Profile {
                     id: "chat".into(),
                     name: "Chat".into(),
+                    icon: "chat".into(),
                     hotkey: "Ctrl+Alt+C".into(),
                     effort: "medium".into(),
                     output: OUTPUT_CHAT.into(),

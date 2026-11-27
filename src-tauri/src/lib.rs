@@ -430,6 +430,7 @@ fn remember_profile(app: &AppHandle, id: &str) {
 struct ProfileItem {
     id: String,
     name: String,
+    icon: String,
     hotkey: String,
 }
 
@@ -471,6 +472,7 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
             .map(|p| ProfileItem {
                 id: p.id.clone(),
                 name: p.name.clone(),
+                icon: p.icon.clone(),
                 hotkey: p.hotkey.clone(),
             })
             .collect(),

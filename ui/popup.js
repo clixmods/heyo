@@ -54,6 +54,7 @@ function render() {
     return;
   }
   els.profileName.textContent = p.name;
+  $("profileIcon").replaceChildren(profileMark(p.icon));
   els.profileHotkey.textContent = prettyHotkey(p.hotkey);
   const engine = p.backend === "api" ? "API" : "Claude Code";
   els.modelTag.textContent = [MODEL_LABELS[p.model] ?? p.model, p.effort, engine].filter(Boolean).join(" · ");
@@ -129,7 +130,8 @@ function renderMenu() {
     ...items.map((p, i) => {
       const li = document.createElement("li");
       li.className = (p.id === state.profile?.id ? "current " : "") + (i === menuIndex ? "active" : "");
-      li.innerHTML = `<span class="n">${i < 9 ? i + 1 : ""}</span><span class="name"></span><span class="hk"></span>`;
+      li.innerHTML = `<span class="n">${i < 9 ? i + 1 : ""}</span><span class="picon"></span><span class="name"></span><span class="hk"></span>`;
+      li.querySelector(".picon").replaceChildren(profileMark(p.icon));
       li.querySelector(".name").textContent = p.name;
       li.querySelector(".hk").textContent = prettyHotkey(p.hotkey);
       li.addEventListener("click", () => switchTo(p.id));

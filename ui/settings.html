@@ -42,6 +42,13 @@
         <!-- Profile editor -->
         <section id="profilePane" class="pane hidden">
           <header class="pane-head">
+            <div class="icon-pick">
+              <button class="icon-tile" id="pIconBtn" title="Choose an icon" aria-label="Choose an icon" aria-haspopup="true" aria-expanded="false"></button>
+              <div class="icon-pop hidden" id="pIconPop" role="dialog" aria-label="Profile icon">
+                <div class="icon-grid" id="pIconGrid"></div>
+                <button class="link-btn" id="pIconNone">No icon</button>
+              </div>
+            </div>
             <input class="title-input" id="pName" placeholder="Profile name" aria-label="Profile name" />
             <div class="head-shortcut">
               <button class="hotkey" id="pHotkey" data-target="profile" title="Click, then press the shortcut"></button>
@@ -223,6 +230,7 @@
     </div>
   </div>
 
+  <script src="icons.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

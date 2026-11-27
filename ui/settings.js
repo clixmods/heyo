@@ -77,7 +77,8 @@ function renderSidebar() {
     ...draft.profiles.map((p) => {
       const b = document.createElement("button");
       b.className = "side-item" + (p.id === selected ? " active" : "");
-      b.innerHTML = `<span class="name"></span><span class="keys"></span>`;
+      b.innerHTML = `<span class="pic"></span><span class="name"></span><span class="keys"></span>`;
+      b.querySelector(".pic").replaceChildren(profileMark(p.icon));
       b.querySelector(".name").textContent = p.name || "Untitled";
       b.querySelector(".keys").replaceChildren(...(p.hotkey ? keycaps(p.hotkey) : []));
       b.title = p.hotkey ? `${p.name} — ${prettyHotkey(p.hotkey)}` : p.name;
@@ -95,6 +96,7 @@ function renderProfile() {
   if (!p) return;
 
   $("pName").value = p.name;
+  renderIcon(p);
   setHotkeyBtn($("pHotkey"), p.hotkey);
   $("pInstructions").value = p.instructions;
   setSeg($("pOutput"), p.output);
@@ -118,6 +120,11 @@ function renderProfile() {
       ? "Faster. Uses your API key, billed per use."
       : "Uses your Claude subscription. A few seconds to start.";
   renderFiles(p);
+}
+
+function renderIcon(p) {
+  $("pIconBtn").replaceChildren(profileMark(p.icon));
+  $("pIconGrid").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.icon === p.icon)));
 }
 
 function renderFiles(p) {
@@ -194,6 +201,50 @@ $("pScreenshot").addEventListener("change", (e) => { currentProfile().attachScre
 onSeg($("pOutput"), (v) => { currentProfile().output = v; updateSaveBar(); });
 onSeg($("pBackend"), (v) => { currentProfile().backend = v; renderProfile(); updateSaveBar(); });
 
+// ---------------------------------------------------------------- icon picker
+
+function toggleIconPop(show = $("pIconPop").classList.contains("hidden")) {
+  $("pIconPop").classList.toggle("hidden", !show);
+  $("pIconBtn").setAttribute("aria-expanded", String(show));
+  if (show) ($("pIconGrid").querySelector('[aria-pressed="true"]') || $("pIconGrid").firstElementChild).focus();
+}
+
+function setIcon(name) {
+  const p = currentProfile();
+  if (!p) return;
+  p.icon = name;
+  renderIcon(p);
+  renderSidebar();
+  updateSaveBar();
+  toggleIconPop(false);
+  $("pIconBtn").focus();
+}
+
+$("pIconGrid").replaceChildren(
+  ...Object.keys(HOPPY_ICONS).map((name) => {
+    const b = document.createElement("button");
+    b.className = "icon-choice";
+    b.dataset.icon = name;
+    b.title = name[0].toUpperCase() + name.slice(1);
+    b.setAttribute("aria-label", b.title);
+    b.append(profileIcon(name));
+    b.addEventListener("click", () => setIcon(name));
+    return b;
+  })
+);
+$("pIconBtn").addEventListener("click", () => toggleIconPop());
+$("pIconNone").addEventListener("click", () => setIcon(""));
+document.addEventListener("mousedown", (e) => {
+  if (!e.target.closest(".icon-pick")) toggleIconPop(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("pIconPop").classList.contains("hidden")) {
+    e.preventDefault();
+    toggleIconPop(false);
+    $("pIconBtn").focus();
+  }
+});
+
 $("pAddFiles").addEventListener("click", async () => {
   const files = await invoke("pick_files");
   const p = currentProfile();
@@ -220,7 +271,7 @@ $("pHotkeyClear").addEventListener("click", () => {
 
 $("addProfile").addEventListener("click", () => {
   const p = {
-    id: newId(), name: "New profile", hotkey: "", backend: "claude-code", model: "claude-opus-5-5",
+    id: newId(), name: "New profile", icon: "", hotkey: "", backend: "claude-code", model: "claude-opus-5-5",
     effort: "low", instructions: "", knowledgeFiles: [], repoPath: "", output: "insert",
     useSelection: true, keepHistory: false, attachScreenshot: false,
   };
