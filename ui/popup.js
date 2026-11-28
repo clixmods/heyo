@@ -18,8 +18,6 @@ const els = {
 let state = null; // PopupState from Rust: { profile, profiles, selection, screenshot, history, look, … }
 let busy = false;
 let lastAnswer = "";
-// An answer to type that came back while the user was in another app (the popup was parked).
-let pendingInsert = "";
 let menuIndex = -1;
 
 const MODEL_LABELS = {
@@ -298,7 +296,6 @@ listen("dictation-stopped", () => { if (listening) setListening(false); });
 // ---------------------------------------------------------------- actions
 
 function reset() {
-  pendingInsert = "";
   els.input.value = "";
   pastIndex = -1;
   showError("");
@@ -342,9 +339,8 @@ async function send() {
     state.screenshot = false;
     if (!isChat()) {
       els.input.value = "";
-      // false = the user is in another app: keep it until the popup comes back (popup-unpark).
+      // false = the user is in another app: Rust holds the answer and types it when they're back.
       if (await invoke("insert_text", { text: reply })) reset();
-      else pendingInsert = reply;
       return;
     }
     // Chat: keep the exchange on screen.
@@ -483,31 +479,22 @@ els.shotClear.addEventListener("click", () => {
 });
 
 // The popup was parked (the user left while the answer was on its way) and is back.
-// "back": they returned to the app they were typing in, so the answer goes in now.
-// "gone": that window was closed; "shown"/"ready": shortcut pressed again, or no way to follow windows.
-listen("popup-unpark", async (event) => {
-  const reason = event.payload;
-  if (!pendingInsert) { if (!busy) els.input.focus(); return; }
-  const text = pendingInsert;
-  pendingInsert = "";
-  if (reason === "back") {
-    try {
-      if (await invoke("insert_text", { text })) { reset(); return; }
-      pendingInsert = text;
-    } catch (e) {
-      showAnswer(text, "Your answer is ready, but it couldn't be typed. Copy it instead.");
-      showError(String(e));
-    }
-    return;
-  }
-  if (reason === "gone") {
-    showAnswer(text, "The window you were typing in was closed. Copy your answer to use it.");
-    els.insertBtn.classList.add("hidden");
-  } else {
-    showAnswer(text, "Your answer is ready.");
-  }
+// Rust types a held answer itself once its window is in front again (then "popup-delivered").
+// Here it hands one over to copy: "gone" = that window was closed, "failed" = typing failed,
+// "shown" = shortcut pressed again, "ready" = no way to follow windows on this system.
+listen("popup-unpark", (event) => {
+  const { reason, text } = event.payload;
+  if (!text) { if (!busy) els.input.focus(); return; }
+  const notes = {
+    gone: "The window you were typing in was closed. Copy your answer to use it.",
+    failed: "Your answer is ready, but it couldn't be typed. Copy it instead.",
+  };
+  showAnswer(text, notes[reason] || "Your answer is ready.");
+  if (reason === "gone") els.insertBtn.classList.add("hidden");
   els.copyBtn.focus();
 });
+
+listen("popup-delivered", () => reset());
 
 listen("popup-open", (event) => {
   state = event.payload;

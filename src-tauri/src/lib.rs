@@ -74,6 +74,10 @@ struct AppState {
     /// The user left while an answer was on its way: the popup is hidden, not closed, and comes
     /// back when they return to the app they were typing in (see `park_popup`).
     parked: AtomicBool,
+    /// An answer to type that is waiting for its window to be in front (memory only).
+    pending: Mutex<Option<String>>,
+    /// `follow_target` is running.
+    following: AtomicBool,
     opened_at: Mutex<Instant>,
     placement: Mutex<Option<Placement>>,
     /// A newer release found on GitHub, waiting for the user to install it.
@@ -394,25 +398,36 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
 }
 
 fn hide_popup_inner(app: &AppHandle) {
-    app.state::<AppState>()
-        .parked
-        .store(false, Ordering::SeqCst);
+    let state = app.state::<AppState>();
+    state.parked.store(false, Ordering::SeqCst);
+    state.pending.lock().unwrap().take();
     cancel_inner(app);
     stop_listening_inner();
     let _ = popup(app).hide();
 }
 
-/// The user clicked away while an answer is on its way: hide the popup but keep the request.
-/// It comes back when the app they were typing in is in front again ("back"), or when that
-/// window is gone ("gone"); without a way to follow windows, once the answer is ready ("ready").
+/// The user left while an answer is on its way, or it is ready but the window it goes to
+/// isn't in front: hide the popup (the request keeps going) and follow that window.
 fn park_popup(app: &AppHandle) {
     let state = app.state::<AppState>();
-    if state.parked.swap(true, Ordering::SeqCst) {
+    if !state.parked.swap(true, Ordering::SeqCst) {
+        stop_listening_inner();
+        let _ = popup(app).hide();
+        log("popup parked: answer on its way, waiting for the target window");
+    }
+    follow_target(app);
+}
+
+/// While an answer is on its way or waiting to be typed, the popup follows the window the user
+/// was typing in: hidden while that window isn't in front, shown again when it is, and the
+/// held answer typed there as soon as it is. Ends once there is nothing left to deliver.
+/// "back": the window is in front again; "gone": it was closed; "ready": no way to follow
+/// windows (Wayland), so the popup comes back with the answer.
+fn follow_target(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    if state.following.swap(true, Ordering::SeqCst) {
         return;
     }
-    stop_listening_inner();
-    let _ = popup(app).hide();
-    log("popup parked: answer on its way, waiting for the target window");
     let token = state.session.lock().unwrap().focus_token.clone();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -421,39 +436,127 @@ fn park_popup(app: &AppHandle) {
         } else {
             1000
         });
+        // Hiding the popup can briefly hand focus to the window under it before the app the
+        // user clicked takes over: count a change only when it holds for two checks in a row.
+        let mut last_front: Option<bool> = None;
         loop {
             tokio::time::sleep(every).await;
             let state = app.state::<AppState>();
-            if !state.parked.load(Ordering::SeqCst) {
+            let parked = state.parked.load(Ordering::SeqCst);
+            let busy = state.cancel.lock().unwrap().is_some();
+            let held = state.pending.lock().unwrap().is_some();
+            if !parked && !busy && !held {
+                state.following.store(false, Ordering::SeqCst);
                 return;
             }
-            let reason = match token.as_deref() {
-                Some(t) if focus::is_front(t).await => Some("back"),
-                Some(t) if !focus::is_open(t) => Some("gone"),
-                Some(_) => None,
-                None => state.cancel.lock().unwrap().is_none().then_some("ready"),
+            let Some(t) = token.as_deref() else {
+                if parked && !busy {
+                    unpark_popup(&app, "ready");
+                }
+                continue;
             };
-            if let Some(reason) = reason {
-                unpark_popup(&app, reason);
-                return;
+            let front = focus::is_front(t).await;
+            let steady = last_front == Some(front);
+            last_front = Some(front);
+            if parked {
+                if front && steady {
+                    if state.pending.lock().unwrap().is_some() {
+                        deliver_held(&app).await;
+                    } else {
+                        unpark_popup(&app, "back");
+                    }
+                } else if !front && !focus::is_open(t) {
+                    unpark_popup(&app, "gone");
+                }
+            } else if !front && steady && !popup(&app).is_focused().unwrap_or(false) {
+                // Shown, but the user went to another app without the popup noticing
+                // (focus never reached it, or a minimize right after it came back).
+                park_popup(&app);
             }
         }
     });
 }
 
-/// Shows the parked popup again where it was and tells the page why.
+/// Shows the parked popup again where it was and tells the page why, handing it the held
+/// answer (if any) to show with a Copy button.
 fn unpark_popup(app: &AppHandle, reason: &str) {
     let state = app.state::<AppState>();
     if !state.parked.swap(false, Ordering::SeqCst) {
         return;
     }
-    log(&format!("popup back ({reason})"));
+    log(&format!(
+        "popup back ({reason}), in front: {}",
+        focus::front_app()
+    ));
+    let text = state.pending.lock().unwrap().take();
     let win = popup(app);
     *state.opened_at.lock().unwrap() = Instant::now();
     let _ = win.show();
     let _ = win.set_focus();
     focus::bring_to_front(&win);
-    let _ = win.emit("popup-unpark", reason);
+    let _ = win.emit("popup-unpark", UnparkEvent { reason, text });
+}
+
+#[derive(Serialize, Clone)]
+struct UnparkEvent<'a> {
+    reason: &'a str,
+    text: Option<String>,
+}
+
+/// The target window is in front again: type the held answer there.
+async fn deliver_held(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let Some(text) = state.pending.lock().unwrap().take() else {
+        return;
+    };
+    state.parked.store(false, Ordering::SeqCst);
+    match deliver(app, text).await {
+        Ok(true) => {
+            log("held answer typed");
+            let _ = popup(app).emit("popup-delivered", ());
+        }
+        Ok(false) => {} // not in front after all: held and parked again
+        Err(e) => {
+            log(&format!("held answer not typed: {e}"));
+            state.parked.store(true, Ordering::SeqCst);
+            unpark_popup(app, "failed");
+        }
+    }
+}
+
+/// Gives focus back to the window the user was typing in and types the text there.
+/// Never types into whatever else is in front: when that window won't come to the front,
+/// the text is held (`pending`), the popup parks, and `follow_target` types it later.
+async fn deliver(app: &AppHandle, text: String) -> Result<bool, String> {
+    let state = app.state::<AppState>();
+    state.inserting.store(true, Ordering::SeqCst);
+    let _ = popup(app).hide();
+    let token = state.session.lock().unwrap().focus_token.clone();
+    focus::restore(token.as_deref()).await;
+    if let Some(t) = token.as_deref() {
+        let mut front = focus::is_front(t).await;
+        for _ in 0..2 {
+            if front {
+                break;
+            }
+            focus::restore(Some(t)).await;
+            front = focus::is_front(t).await;
+        }
+        if !front {
+            log(&format!(
+                "insert held: the target window is not in front ({} is)",
+                focus::front_app()
+            ));
+            *state.pending.lock().unwrap() = Some(text);
+            state.inserting.store(false, Ordering::SeqCst);
+            park_popup(app);
+            return Ok(false);
+        }
+    }
+    let method = state.settings().insert_method;
+    let r = inject::insert(app, &text, &method).await;
+    state.inserting.store(false, Ordering::SeqCst);
+    r.map(|_| true)
 }
 
 fn stop_listening_inner() {
@@ -625,40 +728,17 @@ fn cancel(app: AppHandle) {
 }
 
 /// Hides the popup, gives focus back to the app you were in, and writes the text there.
-/// Returns false without writing while the popup is parked (the user is in another app):
-/// the page keeps the answer and writes it when the popup comes back.
+/// Returns false when it couldn't yet (the user is in another app): Hoppy holds the answer,
+/// types it when they're back (`popup-delivered`), or shows it to copy (`popup-unpark`).
 #[tauri::command]
 async fn insert_text(app: AppHandle, text: String) -> Result<bool, String> {
     let state = app.state::<AppState>();
     if state.parked.load(Ordering::SeqCst) {
+        *state.pending.lock().unwrap() = Some(text);
+        follow_target(&app);
         return Ok(false);
     }
-    state.inserting.store(true, Ordering::SeqCst);
-    let _ = popup(&app).hide();
-    let token = state.session.lock().unwrap().focus_token.clone();
-    focus::restore(token.as_deref()).await;
-    if let Some(t) = token.as_deref() {
-        // Windows may refuse to hand focus back. Never type into whatever is in front instead:
-        // retry, then hold the answer until the user is back in that window.
-        let mut front = focus::is_front(t).await;
-        for _ in 0..2 {
-            if front {
-                break;
-            }
-            focus::restore(Some(t)).await;
-            front = focus::is_front(t).await;
-        }
-        if !front {
-            log("insert held: the target window is not in front");
-            state.inserting.store(false, Ordering::SeqCst);
-            park_popup(&app);
-            return Ok(false);
-        }
-    }
-    let method = state.settings().insert_method;
-    let r = inject::insert(&app, &text, &method).await;
-    state.inserting.store(false, Ordering::SeqCst);
-    r.map(|_| true)
+    deliver(&app, text).await
 }
 
 #[tauri::command]
@@ -950,6 +1030,8 @@ pub fn run() {
             cancel: Mutex::new(None),
             inserting: AtomicBool::new(false),
             parked: AtomicBool::new(false),
+            pending: Mutex::new(None),
+            following: AtomicBool::new(false),
             opened_at: Mutex::new(Instant::now()),
             placement: Mutex::new(None),
             pending_update: Mutex::new(None),
@@ -1021,15 +1103,15 @@ pub fn run() {
                     let st = h2.state::<AppState>();
                     let just_opened =
                         st.opened_at.lock().unwrap().elapsed() < Duration::from_millis(400);
-                    if !st.inserting.load(Ordering::SeqCst)
-                        && !just_opened
-                        && st.settings().popup.close_on_click_outside
+                    let busy = st.cancel.lock().unwrap().is_some();
+                    if st.inserting.load(Ordering::SeqCst)
+                        || !st.settings().popup.close_on_click_outside
                     {
-                        if st.cancel.lock().unwrap().is_some() {
-                            park_popup(&h2);
-                        } else {
-                            hide_popup_inner(&h2);
-                        }
+                        // ours, or the user wants it to float
+                    } else if busy {
+                        park_popup(&h2);
+                    } else if !just_opened {
+                        hide_popup_inner(&h2);
                     }
                 }
                 WindowEvent::CloseRequested { api, .. } => {
