@@ -412,6 +412,7 @@ fn park_popup(app: &AppHandle) {
     }
     stop_listening_inner();
     let _ = popup(app).hide();
+    log("popup parked: answer on its way, waiting for the target window");
     let token = state.session.lock().unwrap().focus_token.clone();
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -427,7 +428,7 @@ fn park_popup(app: &AppHandle) {
                 return;
             }
             let reason = match token.as_deref() {
-                Some(t) if focus::capture().await.as_deref() == Some(t) => Some("back"),
+                Some(t) if focus::is_front(t).await => Some("back"),
                 Some(t) if !focus::is_open(t) => Some("gone"),
                 Some(_) => None,
                 None => state.cancel.lock().unwrap().is_none().then_some("ready"),
@@ -446,6 +447,7 @@ fn unpark_popup(app: &AppHandle, reason: &str) {
     if !state.parked.swap(false, Ordering::SeqCst) {
         return;
     }
+    log(&format!("popup back ({reason})"));
     let win = popup(app);
     *state.opened_at.lock().unwrap() = Instant::now();
     let _ = win.show();
@@ -635,6 +637,24 @@ async fn insert_text(app: AppHandle, text: String) -> Result<bool, String> {
     let _ = popup(&app).hide();
     let token = state.session.lock().unwrap().focus_token.clone();
     focus::restore(token.as_deref()).await;
+    if let Some(t) = token.as_deref() {
+        // Windows may refuse to hand focus back. Never type into whatever is in front instead:
+        // retry, then hold the answer until the user is back in that window.
+        let mut front = focus::is_front(t).await;
+        for _ in 0..2 {
+            if front {
+                break;
+            }
+            focus::restore(Some(t)).await;
+            front = focus::is_front(t).await;
+        }
+        if !front {
+            log("insert held: the target window is not in front");
+            state.inserting.store(false, Ordering::SeqCst);
+            park_popup(&app);
+            return Ok(false);
+        }
+    }
     let method = state.settings().insert_method;
     let r = inject::insert(&app, &text, &method).await;
     state.inserting.store(false, Ordering::SeqCst);

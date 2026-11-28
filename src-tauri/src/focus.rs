@@ -206,6 +206,32 @@ pub fn is_open(token: &str) -> bool {
     }
 }
 
+/// Whether the window a `capture()` token points to is the one in front (or owns the one in
+/// front, like an app's own dialog). Used to never type an answer into the wrong app.
+pub async fn is_front(token: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GA_ROOTOWNER, GetAncestor, GetForegroundWindow,
+        };
+        let Ok(h) = token.parse::<isize>() else {
+            return false;
+        };
+        unsafe {
+            let fg = GetForegroundWindow();
+            if fg.is_null() {
+                return false;
+            }
+            let target = h as windows_sys::Win32::Foundation::HWND;
+            fg == target || GetAncestor(fg, GA_ROOTOWNER) == GetAncestor(target, GA_ROOTOWNER)
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        capture().await.as_deref() == Some(token)
+    }
+}
+
 /// Brings one of our own windows to the front (Windows needs a nudge, other OSes are fine with set_focus).
 #[allow(unused_variables)]
 pub fn bring_to_front(window: &tauri::WebviewWindow) {
