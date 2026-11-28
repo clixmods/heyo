@@ -264,6 +264,23 @@ pub fn front_app() -> String {
     String::new()
 }
 
+/// Shows one of our windows without activating it: it appears on top (the popup is
+/// always-on-top) but focus stays with the app the user is in.
+pub fn show_quietly(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    if let Ok(h) = window.hwnd() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_SHOWNOACTIVATE, ShowWindow};
+        unsafe {
+            ShowWindow(
+                h.0 as windows_sys::Win32::Foundation::HWND,
+                SW_SHOWNOACTIVATE,
+            )
+        };
+        return;
+    }
+    let _ = window.show();
+}
+
 /// Brings one of our own windows to the front (Windows needs a nudge, other OSes are fine with set_focus).
 #[allow(unused_variables)]
 pub fn bring_to_front(window: &tauri::WebviewWindow) {

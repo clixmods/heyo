@@ -491,9 +491,15 @@ fn unpark_popup(app: &AppHandle, reason: &str) {
     let text = state.pending.lock().unwrap().take();
     let win = popup(app);
     *state.opened_at.lock().unwrap() = Instant::now();
-    let _ = win.show();
-    let _ = win.set_focus();
-    focus::bring_to_front(&win);
+    if reason == "shown" {
+        // The user pressed the shortcut: they want it, so it takes focus.
+        let _ = win.show();
+        let _ = win.set_focus();
+        focus::bring_to_front(&win);
+    } else {
+        // Following the app: show it over the window, never take focus from the user.
+        focus::show_quietly(&win);
+    }
     let _ = win.emit("popup-unpark", UnparkEvent { reason, text });
 }
 
@@ -529,14 +535,20 @@ async fn deliver_held(app: &AppHandle) {
 /// the text is held (`pending`), the popup parks, and `follow_target` types it later.
 async fn deliver(app: &AppHandle, text: String) -> Result<bool, String> {
     let state = app.state::<AppState>();
+    let win = popup(app);
+    // Focus is ours to hand back only when the user is in the popup (they pressed Enter there).
+    // Otherwise the popup is just following their app: never pull a window to the front.
+    let ours = win.is_focused().unwrap_or(false);
     state.inserting.store(true, Ordering::SeqCst);
-    let _ = popup(app).hide();
+    let _ = win.hide();
     let token = state.session.lock().unwrap().focus_token.clone();
-    focus::restore(token.as_deref()).await;
+    if ours || token.is_none() {
+        focus::restore(token.as_deref()).await;
+    }
     if let Some(t) = token.as_deref() {
         let mut front = focus::is_front(t).await;
         for _ in 0..2 {
-            if front {
+            if front || !ours {
                 break;
             }
             focus::restore(Some(t)).await;
