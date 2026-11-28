@@ -188,6 +188,24 @@ pub fn round_corners(window: &tauri::WebviewWindow, round: bool) {
     }
 }
 
+/// Whether the window a `capture()` token points to still exists. Windows can tell;
+/// elsewhere we assume it does (the popup then waits until the user comes back to it).
+pub fn is_open(token: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+        match token.parse::<isize>() {
+            Ok(h) => unsafe { IsWindow(h as windows_sys::Win32::Foundation::HWND) != 0 },
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = token;
+        true
+    }
+}
+
 /// Brings one of our own windows to the front (Windows needs a nudge, other OSes are fine with set_focus).
 #[allow(unused_variables)]
 pub fn bring_to_front(window: &tauri::WebviewWindow) {

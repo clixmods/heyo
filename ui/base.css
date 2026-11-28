@@ -130,5 +130,48 @@ kbd {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
 }
 
+/* Profile colors: set data-accent on any element (the popup's body, a sidebar item, the profile
+   pane) and the accent tokens below it follow. Empty or "orange" = Hoppy's default above.
+   Each -ink keeps 4.5:1 on the surfaces and on its own soft tint, light and dark. */
+[data-accent=""], [data-accent="orange"] {
+  --accent: #d9774e;
+  --accent-ink: #ad5129;
+  --accent-soft: rgba(217, 119, 78, 0.12);
+  --accent-grad: linear-gradient(135deg, #ee9862 0%, #d9774e 50%, #d0636a 100%);
+  --ring: rgba(217, 119, 78, 0.45);
+}
+[data-accent="rose"]   { --accent: #d95a7c; --accent-ink: #b0385a; }
+[data-accent="violet"] { --accent: #8c66db; --accent-ink: #6a46b8; }
+[data-accent="blue"]   { --accent: #4f80e0; --accent-ink: #2f5fbd; }
+[data-accent="teal"]   { --accent: #2f9a94; --accent-ink: #1b726d; }
+[data-accent="green"]  { --accent: #4f9a55; --accent-ink: #33763a; }
+[data-accent="amber"]  { --accent: #d39b2b; --accent-ink: #8a600f; }
+[data-accent="slate"]  { --accent: #717887; --accent-ink: #4b5262; }
+[data-accent]:not([data-accent=""]):not([data-accent="orange"]) {
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-grad: linear-gradient(135deg, color-mix(in srgb, var(--accent) 72%, #fff) 0%, var(--accent) 55%, color-mix(in srgb, var(--accent) 84%, #000) 100%);
+}
+@media (prefers-color-scheme: dark) {
+  [data-accent=""], [data-accent="orange"] {
+    --accent: #ee9064;
+    --accent-ink: #f3a57f;
+    --accent-soft: rgba(238, 144, 100, 0.15);
+    --accent-grad: linear-gradient(135deg, #f4a26c 0%, #e5855a 50%, #d86d73 100%);
+    --ring: rgba(238, 144, 100, 0.55);
+  }
+  [data-accent="rose"]   { --accent: #f0809d; --accent-ink: #f59bb3; }
+  [data-accent="violet"] { --accent: #a98bf0; --accent-ink: #bca5f5; }
+  [data-accent="blue"]   { --accent: #7ea3f2; --accent-ink: #9cb9f6; }
+  [data-accent="teal"]   { --accent: #5cc4bd; --accent-ink: #80d4ce; }
+  [data-accent="green"]  { --accent: #7cc482; --accent-ink: #9bd3a0; }
+  [data-accent="amber"]  { --accent: #e8b850; --accent-ink: #f0ca72; }
+  [data-accent="slate"]  { --accent: #a3a9b6; --accent-ink: #bcc1cc; }
+  [data-accent]:not([data-accent=""]):not([data-accent="orange"]) {
+    --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+    --ring: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
 /* Profile mark: the profile's icon, or this dot when it has none. */
 .dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-grad); flex: none; }

@@ -71,6 +71,9 @@ struct AppState {
     cancel: Mutex<Option<tokio::sync::oneshot::Sender<()>>>,
     /// Set while we hide the popup on purpose (insert), so the blur handler leaves things alone.
     inserting: AtomicBool,
+    /// The user left while an answer was on its way: the popup is hidden, not closed, and comes
+    /// back when they return to the app they were typing in (see `park_popup`).
+    parked: AtomicBool,
     opened_at: Mutex<Instant>,
     placement: Mutex<Option<Placement>>,
     /// A newer release found on GitHub, waiting for the user to install it.
@@ -244,6 +247,16 @@ async fn open_popup(app: &AppHandle, profile_id: String) {
     let state = app.state::<AppState>();
     let win = popup(app);
 
+    // Same shortcut while an answer is on its way in the background = bring the popup back.
+    if state.parked.load(Ordering::SeqCst) {
+        let same = state.session.lock().unwrap().profile_id == profile_id;
+        if same {
+            unpark_popup(app, "shown");
+            return;
+        }
+        hide_popup_inner(app);
+    }
+
     // Same shortcut again while open = close.
     if win.is_visible().unwrap_or(false) {
         let same = state.session.lock().unwrap().profile_id == profile_id;
@@ -381,9 +394,64 @@ fn position_popup(app: &AppHandle, win: &WebviewWindow, caret: Option<(i32, i32,
 }
 
 fn hide_popup_inner(app: &AppHandle) {
+    app.state::<AppState>()
+        .parked
+        .store(false, Ordering::SeqCst);
     cancel_inner(app);
     stop_listening_inner();
     let _ = popup(app).hide();
+}
+
+/// The user clicked away while an answer is on its way: hide the popup but keep the request.
+/// It comes back when the app they were typing in is in front again ("back"), or when that
+/// window is gone ("gone"); without a way to follow windows, once the answer is ready ("ready").
+fn park_popup(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    if state.parked.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    stop_listening_inner();
+    let _ = popup(app).hide();
+    let token = state.session.lock().unwrap().focus_token.clone();
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let every = Duration::from_millis(if cfg!(target_os = "windows") {
+            250
+        } else {
+            1000
+        });
+        loop {
+            tokio::time::sleep(every).await;
+            let state = app.state::<AppState>();
+            if !state.parked.load(Ordering::SeqCst) {
+                return;
+            }
+            let reason = match token.as_deref() {
+                Some(t) if focus::capture().await.as_deref() == Some(t) => Some("back"),
+                Some(t) if !focus::is_open(t) => Some("gone"),
+                Some(_) => None,
+                None => state.cancel.lock().unwrap().is_none().then_some("ready"),
+            };
+            if let Some(reason) = reason {
+                unpark_popup(&app, reason);
+                return;
+            }
+        }
+    });
+}
+
+/// Shows the parked popup again where it was and tells the page why.
+fn unpark_popup(app: &AppHandle, reason: &str) {
+    let state = app.state::<AppState>();
+    if !state.parked.swap(false, Ordering::SeqCst) {
+        return;
+    }
+    let win = popup(app);
+    *state.opened_at.lock().unwrap() = Instant::now();
+    let _ = win.show();
+    let _ = win.set_focus();
+    focus::bring_to_front(&win);
+    let _ = win.emit("popup-unpark", reason);
 }
 
 fn stop_listening_inner() {
@@ -431,6 +499,7 @@ struct ProfileItem {
     id: String,
     name: String,
     icon: String,
+    color: String,
     hotkey: String,
 }
 
@@ -459,6 +528,7 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
         .profile(&session.profile_id)
         .or_else(|| s.current_profile())
         .cloned();
+    let show_hints = profile.as_ref().and_then(|p| p.show_hints);
     let history = profile
         .as_ref()
         .filter(|p| p.keep_history)
@@ -473,6 +543,7 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
                 id: p.id.clone(),
                 name: p.name.clone(),
                 icon: p.icon.clone(),
+                color: p.color.clone(),
                 hotkey: p.hotkey.clone(),
             })
             .collect(),
@@ -482,7 +553,10 @@ fn popup_state_inner(app: &AppHandle) -> PopupState {
         dictation: speech::AVAILABLE,
         screenshot: session.screenshot.is_some(),
         update: updates::pending_version(app),
-        look: s.popup.clone(),
+        look: settings::PopupLook {
+            show_hints: show_hints.unwrap_or(s.popup.show_hints),
+            ..s.popup.clone()
+        },
     }
 }
 
@@ -549,9 +623,14 @@ fn cancel(app: AppHandle) {
 }
 
 /// Hides the popup, gives focus back to the app you were in, and writes the text there.
+/// Returns false without writing while the popup is parked (the user is in another app):
+/// the page keeps the answer and writes it when the popup comes back.
 #[tauri::command]
-async fn insert_text(app: AppHandle, text: String) -> Result<(), String> {
+async fn insert_text(app: AppHandle, text: String) -> Result<bool, String> {
     let state = app.state::<AppState>();
+    if state.parked.load(Ordering::SeqCst) {
+        return Ok(false);
+    }
     state.inserting.store(true, Ordering::SeqCst);
     let _ = popup(&app).hide();
     let token = state.session.lock().unwrap().focus_token.clone();
@@ -559,7 +638,7 @@ async fn insert_text(app: AppHandle, text: String) -> Result<(), String> {
     let method = state.settings().insert_method;
     let r = inject::insert(&app, &text, &method).await;
     state.inserting.store(false, Ordering::SeqCst);
-    r
+    r.map(|_| true)
 }
 
 #[tauri::command]
@@ -850,6 +929,7 @@ pub fn run() {
             shortcuts: Mutex::new(HashMap::new()),
             cancel: Mutex::new(None),
             inserting: AtomicBool::new(false),
+            parked: AtomicBool::new(false),
             opened_at: Mutex::new(Instant::now()),
             placement: Mutex::new(None),
             pending_update: Mutex::new(None),
@@ -912,8 +992,8 @@ pub fn run() {
             }
             tray.build(app)?;
 
-            // Clicking elsewhere closes the popup (and cancels a pending request),
-            // unless the user wants it to float until Esc.
+            // Clicking elsewhere closes the popup, unless the user wants it to float until Esc.
+            // With an answer on its way it only hides, and comes back with it (`park_popup`).
             let win = popup(&handle);
             let h2 = handle.clone();
             win.on_window_event(move |e| match e {
@@ -925,7 +1005,11 @@ pub fn run() {
                         && !just_opened
                         && st.settings().popup.close_on_click_outside
                     {
-                        hide_popup_inner(&h2);
+                        if st.cancel.lock().unwrap().is_some() {
+                            park_popup(&h2);
+                        } else {
+                            hide_popup_inner(&h2);
+                        }
                     }
                 }
                 WindowEvent::CloseRequested { api, .. } => {

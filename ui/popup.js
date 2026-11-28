@@ -9,7 +9,7 @@ const els = {
   history: $("history"), selection: $("selection"), selText: $("selText"), selClear: $("selClear"),
   shot: $("shot"), shotClear: $("shotClear"),
   input: $("input"), status: $("status"), statusText: $("statusText"), error: $("error"),
-  answer: $("answer"), answerText: $("answerText"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
+  answer: $("answer"), answerText: $("answerText"), answerNote: $("answerNote"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
   insertKbd: $("insertKbd"), hints: $("hints"), micBtn: $("micBtn"),
   listening: $("listening"), listenText: $("listenText"), listenKbd: $("listenKbd"),
   update: $("update"), updateText: $("updateText"), updateBtn: $("updateBtn"),
@@ -18,6 +18,8 @@ const els = {
 let state = null; // PopupState from Rust: { profile, profiles, selection, screenshot, history, look, … }
 let busy = false;
 let lastAnswer = "";
+// An answer to type that came back while the user was in another app (the popup was parked).
+let pendingInsert = "";
 let menuIndex = -1;
 
 const MODEL_LABELS = {
@@ -47,6 +49,7 @@ function isChat() { return state?.profile?.output === "chat"; }
 function render() {
   document.body.classList.toggle("glass", !!look().translucent);
   const p = state?.profile;
+  document.body.dataset.accent = p?.color || "";
   if (!p) {
     els.profileName.textContent = "No profile";
     els.input.placeholder = "Create a profile in Settings.";
@@ -130,6 +133,7 @@ function renderMenu() {
     ...items.map((p, i) => {
       const li = document.createElement("li");
       li.className = (p.id === state.profile?.id ? "current " : "") + (i === menuIndex ? "active" : "");
+      li.dataset.accent = p.color || "";
       li.innerHTML = `<span class="n">${i < 9 ? i + 1 : ""}</span><span class="picon"></span><span class="name"></span><span class="hk"></span>`;
       li.querySelector(".picon").replaceChildren(profileMark(p.icon));
       li.querySelector(".name").textContent = p.name;
@@ -142,6 +146,7 @@ function renderMenu() {
 
 function toggleMenu(show = els.menu.classList.contains("hidden")) {
   els.menu.classList.toggle("hidden", !show);
+  els.profileBtn.setAttribute("aria-expanded", String(show));
   if (show) {
     menuIndex = Math.max(0, (state?.profiles || []).findIndex((p) => p.id === state.profile?.id));
     renderMenu();
@@ -164,8 +169,11 @@ function showError(msg) {
   fit();
 }
 
-function showAnswer(text) {
+function showAnswer(text, note = "") {
   lastAnswer = text;
+  els.answerNote.textContent = note;
+  els.answerNote.classList.toggle("hidden", !note);
+  if (!note) els.insertBtn.classList.remove("hidden");
   els.answerText.textContent = text;
   els.answer.classList.toggle("hidden", !text);
   fit();
@@ -290,6 +298,7 @@ listen("dictation-stopped", () => { if (listening) setListening(false); });
 // ---------------------------------------------------------------- actions
 
 function reset() {
+  pendingInsert = "";
   els.input.value = "";
   pastIndex = -1;
   showError("");
@@ -333,8 +342,9 @@ async function send() {
     state.screenshot = false;
     if (!isChat()) {
       els.input.value = "";
-      await invoke("insert_text", { text: reply });
-      reset();
+      // false = the user is in another app: keep it until the popup comes back (popup-unpark).
+      if (await invoke("insert_text", { text: reply })) reset();
+      else pendingInsert = reply;
       return;
     }
     // Chat: keep the exchange on screen.
@@ -470,6 +480,33 @@ els.shotClear.addEventListener("click", () => {
   state.screenshot = false;
   render();
   els.input.focus();
+});
+
+// The popup was parked (the user left while the answer was on its way) and is back.
+// "back": they returned to the app they were typing in, so the answer goes in now.
+// "gone": that window was closed; "shown"/"ready": shortcut pressed again, or no way to follow windows.
+listen("popup-unpark", async (event) => {
+  const reason = event.payload;
+  if (!pendingInsert) { if (!busy) els.input.focus(); return; }
+  const text = pendingInsert;
+  pendingInsert = "";
+  if (reason === "back") {
+    try {
+      if (await invoke("insert_text", { text })) { reset(); return; }
+      pendingInsert = text;
+    } catch (e) {
+      showAnswer(text, "Your answer is ready, but it couldn't be typed. Copy it instead.");
+      showError(String(e));
+    }
+    return;
+  }
+  if (reason === "gone") {
+    showAnswer(text, "The window you were typing in was closed. Copy your answer to use it.");
+    els.insertBtn.classList.add("hidden");
+  } else {
+    showAnswer(text, "Your answer is ready.");
+  }
+  els.copyBtn.focus();
 });
 
 listen("popup-open", (event) => {

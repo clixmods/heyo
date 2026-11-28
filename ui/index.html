@@ -10,11 +10,13 @@
 <body>
   <main class="panel" id="panel">
     <header class="top">
-      <button class="profile-btn" id="profileBtn" title="Switch profile (Tab)">
+      <button class="profile-btn" id="profileBtn" title="Switch profile (Tab)" aria-haspopup="listbox" aria-expanded="false">
         <span class="picon" id="profileIcon"><span class="dot"></span></span>
-        <span id="profileName">—</span>
-        <span class="hk" id="profileHotkey"></span>
-        <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="label">
+          <span class="name" id="profileName">—</span>
+          <span class="hk" id="profileHotkey"></span>
+          <svg class="chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
       </button>
       <div class="meta">
         <span id="modelTag"></span>
@@ -74,6 +76,7 @@
     <div class="error hidden" id="error"></div>
 
     <section class="answer hidden" id="answer">
+      <p class="answer-note hidden" id="answerNote"></p>
       <div class="answer-text" id="answerText"></div>
       <div class="answer-actions">
         <button class="chip primary" id="insertBtn">Insert <kbd id="insertKbd">Ctrl ↵</kbd></button>

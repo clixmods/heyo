@@ -5,7 +5,7 @@ html, body { background: transparent; overflow: hidden; }
 .panel {
   margin: 14px;
   background:
-    radial-gradient(70% 110px at 0% 0%, color-mix(in srgb, var(--chrome-1) 85%, transparent), transparent),
+    radial-gradient(70% 110px at 0% 0%, color-mix(in srgb, var(--accent) 11%, transparent), transparent),
     radial-gradient(60% 110px at 100% 0%, color-mix(in srgb, var(--chrome-2) 85%, transparent), transparent),
     var(--bg);
   border: 1px solid var(--line-strong);
@@ -17,6 +17,7 @@ html, body { background: transparent; overflow: hidden; }
 button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 
 /* ---------- header ---------- */
+/* The profile shows as its icon; hovering (or the menu) unrolls its name and shortcut. */
 .top {
   display: flex;
   align-items: center;
@@ -27,11 +28,10 @@ button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 .profile-btn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
   min-width: 0;
   border: 0;
-  background: var(--bg-soft);
-  padding: 4px 9px 4px 9px;
+  background: var(--accent-soft);
+  padding: 4px 6px;
   min-height: 28px;
   border-radius: 999px;
   font-weight: 600;
@@ -39,8 +39,24 @@ button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
   color: var(--text);
   transition: background-color 160ms var(--ease);
 }
-.profile-btn:hover { background: var(--bg-hover); }
-.profile-btn:active { background: var(--bg-pressed); }
+.profile-btn:hover, .profile-btn[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.profile-btn:active { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+.profile-btn .label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
+  transition: max-width 240ms var(--ease), margin-left 240ms var(--ease), opacity 160ms var(--ease);
+}
+.profile-btn:hover .label,
+.profile-btn:focus-visible .label,
+.profile-btn[aria-expanded="true"] .label { max-width: 300px; margin-left: 8px; opacity: 1; }
+.profile-btn .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .profile-btn .picon { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--accent-ink); }
 .profile-btn .picon svg { width: 16px; height: 16px; }
 .profile-btn .dot { box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -105,10 +121,9 @@ button:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
 }
 .menu li:hover, .menu li.active { background: var(--bg-hover); color: var(--text); }
 .menu li .n { color: var(--text-faint); font-size: 11px; width: 14px; font-variant-numeric: tabular-nums; }
-.menu li .picon { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--text-faint); }
+.menu li .picon { flex: none; display: grid; place-items: center; width: 16px; height: 16px; color: var(--accent-ink); }
 .menu li .picon svg { width: 15px; height: 15px; }
 .menu li .picon .dot { width: 6px; height: 6px; }
-.menu li.current .picon { color: var(--accent-ink); }
 .menu li .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu li.current { color: var(--text); }
 .menu li.current .name { font-weight: 600; }
@@ -174,6 +189,7 @@ textarea {
   overflow-y: auto;
   caret-color: var(--accent);
 }
+textarea:focus-visible { outline: none; } /* the caret is enough; no box around the text */
 textarea::placeholder { color: var(--text-faint); }
 textarea:disabled { opacity: 0.55; }
 
@@ -231,6 +247,7 @@ textarea:disabled { opacity: 0.55; }
   border-radius: 16px;
   background: var(--bg-soft);
 }
+.answer-note { margin: 0 0 8px; color: var(--accent-ink); font-size: 12.5px; font-weight: 600; }
 .answer-text {
   white-space: pre-wrap;
   word-wrap: break-word;
@@ -290,7 +307,7 @@ body.glass .panel {
   border-color: var(--line);
   box-shadow: var(--highlight);
   background:
-    radial-gradient(70% 110px at 0% 0%, color-mix(in srgb, var(--chrome-1) 45%, transparent), transparent),
+    radial-gradient(70% 110px at 0% 0%, color-mix(in srgb, var(--accent) 8%, transparent), transparent),
     radial-gradient(60% 110px at 100% 0%, color-mix(in srgb, var(--chrome-2) 45%, transparent), transparent),
     color-mix(in srgb, var(--bg) 58%, transparent);
 }
