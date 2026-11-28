@@ -42,6 +42,14 @@
         <!-- Profile editor -->
         <section id="profilePane" class="pane hidden">
           <header class="pane-head">
+            <div class="icon-pick">
+              <button class="icon-tile" id="pIconBtn" title="Icon and color" aria-label="Icon and color" aria-haspopup="true" aria-expanded="false"></button>
+              <div class="icon-pop hidden" id="pIconPop" role="dialog" aria-label="Icon and color">
+                <div class="color-row" id="pColorRow" role="group" aria-label="Color"></div>
+          <div class="icon-grid" id="pIconGrid"></div>
+                <button class="link-btn" id="pIconNone">No icon</button>
+              </div>
+            </div>
             <input class="title-input" id="pName" placeholder="Profile name" aria-label="Profile name" />
             <div class="head-shortcut">
               <button class="hotkey" id="pHotkey" data-target="profile" title="Click, then press the shortcut"></button>
@@ -100,6 +108,10 @@
                 <option value="max">Max</option>
               </select>
             </div>
+            <label class="row-item toggle">
+              <div class="row-text"><b>Show keyboard hints</b><span class="sub">The shortcut list at the bottom of the popup.</span></div>
+              <input type="checkbox" id="pShowHints" /><span class="sw"></span>
+            </label>
           </div>
 
           <h2 class="section">Context</h2>
@@ -113,7 +125,7 @@
               <input type="checkbox" id="pScreenshot" /><span class="sw"></span>
             </label>
             <label class="row-item toggle">
-              <div class="row-text"><b>Keep the conversation</b><span class="sub">The profile remembers previous exchanges.</span></div>
+              <div class="row-text"><b>Show conversation</b><span class="sub">Previous exchanges stay in the popup, and the AI remembers them.</span></div>
               <input type="checkbox" id="pKeepHistory" /><span class="sw"></span>
             </label>
             <div class="row-item stack" id="pRepoField">
@@ -155,7 +167,7 @@
           <h2 class="section">Popup window</h2>
           <div class="group">
             <label class="row-item toggle">
-              <div class="row-text"><b>Show keyboard hints</b><span class="sub">The shortcut list at the bottom of the popup.</span></div>
+              <div class="row-text"><b>Keyboard hints by default</b><span class="sub">For new profiles. Each profile can turn them on or off.</span></div>
               <input type="checkbox" id="gShowHints" /><span class="sw"></span>
             </label>
             <label class="row-item toggle">
@@ -223,6 +235,7 @@
     </div>
   </div>
 
+  <script src="icons.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

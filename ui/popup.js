@@ -9,7 +9,7 @@ const els = {
   history: $("history"), selection: $("selection"), selText: $("selText"), selClear: $("selClear"),
   shot: $("shot"), shotClear: $("shotClear"),
   input: $("input"), status: $("status"), statusText: $("statusText"), error: $("error"),
-  answer: $("answer"), answerText: $("answerText"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
+  answer: $("answer"), answerText: $("answerText"), answerNote: $("answerNote"), insertBtn: $("insertBtn"), copyBtn: $("copyBtn"),
   insertKbd: $("insertKbd"), hints: $("hints"), micBtn: $("micBtn"),
   listening: $("listening"), listenText: $("listenText"), listenKbd: $("listenKbd"),
   update: $("update"), updateText: $("updateText"), updateBtn: $("updateBtn"),
@@ -47,6 +47,7 @@ function isChat() { return state?.profile?.output === "chat"; }
 function render() {
   document.body.classList.toggle("glass", !!look().translucent);
   const p = state?.profile;
+  document.body.dataset.accent = p?.color || "";
   if (!p) {
     els.profileName.textContent = "No profile";
     els.input.placeholder = "Create a profile in Settings.";
@@ -54,6 +55,7 @@ function render() {
     return;
   }
   els.profileName.textContent = p.name;
+  $("profileIcon").replaceChildren(profileMark(p.icon));
   els.profileHotkey.textContent = prettyHotkey(p.hotkey);
   const engine = p.backend === "api" ? "API" : "Claude Code";
   els.modelTag.textContent = [MODEL_LABELS[p.model] ?? p.model, p.effort, engine].filter(Boolean).join(" · ");
@@ -129,7 +131,9 @@ function renderMenu() {
     ...items.map((p, i) => {
       const li = document.createElement("li");
       li.className = (p.id === state.profile?.id ? "current " : "") + (i === menuIndex ? "active" : "");
-      li.innerHTML = `<span class="n">${i < 9 ? i + 1 : ""}</span><span class="name"></span><span class="hk"></span>`;
+      li.dataset.accent = p.color || "";
+      li.innerHTML = `<span class="n">${i < 9 ? i + 1 : ""}</span><span class="picon"></span><span class="name"></span><span class="hk"></span>`;
+      li.querySelector(".picon").replaceChildren(profileMark(p.icon));
       li.querySelector(".name").textContent = p.name;
       li.querySelector(".hk").textContent = prettyHotkey(p.hotkey);
       li.addEventListener("click", () => switchTo(p.id));
@@ -140,6 +144,7 @@ function renderMenu() {
 
 function toggleMenu(show = els.menu.classList.contains("hidden")) {
   els.menu.classList.toggle("hidden", !show);
+  els.profileBtn.setAttribute("aria-expanded", String(show));
   if (show) {
     menuIndex = Math.max(0, (state?.profiles || []).findIndex((p) => p.id === state.profile?.id));
     renderMenu();
@@ -152,7 +157,8 @@ function setBusy(on, text = "Thinking…") {
   els.status.classList.toggle("hidden", !on);
   els.statusText.textContent = text;
   els.input.disabled = on;
-  if (!on) els.input.focus();
+  // Only when the popup has focus: while it follows the user's app it must not take it.
+  if (!on && document.hasFocus()) els.input.focus();
   fit();
 }
 
@@ -162,8 +168,11 @@ function showError(msg) {
   fit();
 }
 
-function showAnswer(text) {
+function showAnswer(text, note = "") {
   lastAnswer = text;
+  els.answerNote.textContent = note;
+  els.answerNote.classList.toggle("hidden", !note);
+  if (!note) els.insertBtn.classList.remove("hidden");
   els.answerText.textContent = text;
   els.answer.classList.toggle("hidden", !text);
   fit();
@@ -331,8 +340,8 @@ async function send() {
     state.screenshot = false;
     if (!isChat()) {
       els.input.value = "";
-      await invoke("insert_text", { text: reply });
-      reset();
+      // false = the user is in another app: Rust holds the answer and types it when they're back.
+      if (await invoke("insert_text", { text: reply })) reset();
       return;
     }
     // Chat: keep the exchange on screen.
@@ -469,6 +478,24 @@ els.shotClear.addEventListener("click", () => {
   render();
   els.input.focus();
 });
+
+// The popup was parked (the user left while the answer was on its way) and is back.
+// Rust types a held answer itself once its window is in front again (then "popup-delivered").
+// Here it hands one over to copy: "gone" = that window was closed, "failed" = typing failed,
+// "shown" = shortcut pressed again, "ready" = no way to follow windows on this system.
+listen("popup-unpark", (event) => {
+  const { reason, text } = event.payload;
+  if (!text) return; // "back": shown over the user's app, without focus
+  const notes = {
+    gone: "The window you were typing in was closed. Copy your answer to use it.",
+    failed: "Your answer is ready, but it couldn't be typed. Copy it instead.",
+  };
+  showAnswer(text, notes[reason] || "Your answer is ready.");
+  if (reason === "gone") els.insertBtn.classList.add("hidden");
+  els.copyBtn.focus();
+});
+
+listen("popup-delivered", () => reset());
 
 listen("popup-open", (event) => {
   state = event.payload;

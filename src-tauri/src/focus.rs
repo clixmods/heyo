@@ -188,6 +188,131 @@ pub fn round_corners(window: &tauri::WebviewWindow, round: bool) {
     }
 }
 
+/// Whether the window a `capture()` token points to still exists. Windows can tell;
+/// elsewhere we assume it does (the popup then waits until the user comes back to it).
+pub fn is_open(token: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        use windows_sys::Win32::UI::WindowsAndMessaging::IsWindow;
+        match token.parse::<isize>() {
+            Ok(h) => unsafe { IsWindow(h as windows_sys::Win32::Foundation::HWND) != 0 },
+            Err(_) => false,
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = token;
+        true
+    }
+}
+
+/// Whether the window a `capture()` token points to is the one in front (or owns the one in
+/// front, like an app's own dialog). Used to never type an answer into the wrong app.
+pub async fn is_front(token: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    {
+        is_front_now(token)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        capture().await.as_deref() == Some(token)
+    }
+}
+
+/// A cheap check to run right before each key goes out (see `inject::insert`).
+/// Windows only; elsewhere the window can't be checked that fast, so it always passes.
+pub fn front_check(token: &str) -> impl Fn() -> bool + Send + Sync + Clone + 'static {
+    let token = token.to_string();
+    move || {
+        #[cfg(target_os = "windows")]
+        {
+            is_front_now(&token)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = &token;
+            true
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn is_front_now(token: &str) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GA_ROOTOWNER, GetAncestor, GetForegroundWindow,
+    };
+    let Ok(h) = token.parse::<isize>() else {
+        return false;
+    };
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_null() {
+            return false;
+        }
+        let target = h as windows_sys::Win32::Foundation::HWND;
+        fg == target || GetAncestor(fg, GA_ROOTOWNER) == GetAncestor(target, GA_ROOTOWNER)
+    }
+}
+
+/// Executable name of the app in front ("Discord.exe"), for the log. Never a window title.
+pub fn front_app() -> String {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        use windows_sys::Win32::Foundation::CloseHandle;
+        use windows_sys::Win32::System::Threading::{
+            OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+            QueryFullProcessImageNameW,
+        };
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            GetForegroundWindow, GetWindowThreadProcessId,
+        };
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(GetForegroundWindow(), &mut pid);
+        let h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if h.is_null() {
+            return "?".into();
+        }
+        let mut buf = [0u16; 260];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(h, PROCESS_NAME_WIN32, buf.as_mut_ptr(), &mut len);
+        CloseHandle(h);
+        if ok == 0 {
+            return "?".into();
+        }
+        let path = String::from_utf16_lossy(&buf[..len as usize]);
+        path.rsplit('\\').next().unwrap_or("?").to_string()
+    }
+    #[cfg(not(target_os = "windows"))]
+    String::new()
+}
+
+/// Shows one of our windows without activating it: it appears on top (the popup is
+/// always-on-top) but focus stays with the app the user is in.
+pub fn show_quietly(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    if let Ok(h) = window.hwnd() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_SHOWNOACTIVATE, ShowWindow};
+        unsafe {
+            ShowWindow(
+                h.0 as windows_sys::Win32::Foundation::HWND,
+                SW_SHOWNOACTIVATE,
+            )
+        };
+        return;
+    }
+    let _ = window.show();
+}
+
+/// Hides one of our windows at the OS level (pairs with `show_quietly`). No-op elsewhere.
+#[allow(unused_variables)]
+pub fn force_hide(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    if let Ok(h) = window.hwnd() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_HIDE, ShowWindow};
+        unsafe { ShowWindow(h.0 as windows_sys::Win32::Foundation::HWND, SW_HIDE) };
+    }
+}
+
 /// Brings one of our own windows to the front (Windows needs a nudge, other OSes are fine with set_focus).
 #[allow(unused_variables)]
 pub fn bring_to_front(window: &tauri::WebviewWindow) {
