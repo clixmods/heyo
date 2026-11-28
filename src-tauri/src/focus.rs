@@ -281,6 +281,16 @@ pub fn show_quietly(window: &tauri::WebviewWindow) {
     let _ = window.show();
 }
 
+/// Hides one of our windows at the OS level (pairs with `show_quietly`). No-op elsewhere.
+#[allow(unused_variables)]
+pub fn force_hide(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    if let Ok(h) = window.hwnd() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_HIDE, ShowWindow};
+        unsafe { ShowWindow(h.0 as windows_sys::Win32::Foundation::HWND, SW_HIDE) };
+    }
+}
+
 /// Brings one of our own windows to the front (Windows needs a nudge, other OSes are fine with set_focus).
 #[allow(unused_variables)]
 pub fn bring_to_front(window: &tauri::WebviewWindow) {

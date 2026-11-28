@@ -157,7 +157,8 @@ function setBusy(on, text = "Thinking…") {
   els.status.classList.toggle("hidden", !on);
   els.statusText.textContent = text;
   els.input.disabled = on;
-  if (!on) els.input.focus();
+  // Only when the popup has focus: while it follows the user's app it must not take it.
+  if (!on && document.hasFocus()) els.input.focus();
   fit();
 }
 
@@ -484,7 +485,7 @@ els.shotClear.addEventListener("click", () => {
 // "shown" = shortcut pressed again, "ready" = no way to follow windows on this system.
 listen("popup-unpark", (event) => {
   const { reason, text } = event.payload;
-  if (!text) { if (!busy) els.input.focus(); return; }
+  if (!text) return; // "back": shown over the user's app, without focus
   const notes = {
     gone: "The window you were typing in was closed. Copy your answer to use it.",
     failed: "Your answer is ready, but it couldn't be typed. Copy it instead.",

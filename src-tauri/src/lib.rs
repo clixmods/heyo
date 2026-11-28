@@ -261,6 +261,16 @@ async fn open_popup(app: &AppHandle, profile_id: String) {
         hide_popup_inner(app);
     }
 
+    // Same shortcut while it follows the app without focus = use it.
+    if win.is_visible().unwrap_or(false)
+        && !win.is_focused().unwrap_or(false)
+        && state.session.lock().unwrap().profile_id == profile_id
+    {
+        let _ = win.set_focus();
+        focus::bring_to_front(&win);
+        return;
+    }
+
     // Same shortcut again while open = close.
     if win.is_visible().unwrap_or(false) {
         let same = state.session.lock().unwrap().profile_id == profile_id;
@@ -403,7 +413,7 @@ fn hide_popup_inner(app: &AppHandle) {
     state.pending.lock().unwrap().take();
     cancel_inner(app);
     stop_listening_inner();
-    let _ = popup(app).hide();
+    hide_window(&popup(app));
 }
 
 /// The user left while an answer is on its way, or it is ready but the window it goes to
@@ -412,7 +422,7 @@ fn park_popup(app: &AppHandle) {
     let state = app.state::<AppState>();
     if !state.parked.swap(true, Ordering::SeqCst) {
         stop_listening_inner();
-        let _ = popup(app).hide();
+        hide_window(&popup(app));
         log("popup parked: answer on its way, waiting for the target window");
     }
     follow_target(app);
@@ -445,35 +455,49 @@ fn follow_target(app: &AppHandle) {
             let parked = state.parked.load(Ordering::SeqCst);
             let busy = state.cancel.lock().unwrap().is_some();
             let held = state.pending.lock().unwrap().is_some();
-            if !parked && !busy && !held {
-                state.following.store(false, Ordering::SeqCst);
-                return;
-            }
+            let win = popup(&app);
+            // Shown over the user's app without focus: it keeps following until they use it.
+            let quiet =
+                !parked && win.is_visible().unwrap_or(false) && !win.is_focused().unwrap_or(false);
+            let idle = !parked && !busy && !held;
             let Some(t) = token.as_deref() else {
                 if parked && !busy {
                     unpark_popup(&app, "ready");
                 }
+                if idle {
+                    break;
+                }
                 continue;
             };
+            let open = focus::is_open(t);
+            if idle && (!quiet || !open) {
+                if quiet {
+                    // Its window was closed: nothing left to follow.
+                    hide_popup_inner(&app);
+                }
+                break;
+            }
             let front = focus::is_front(t).await;
             let steady = last_front == Some(front);
             last_front = Some(front);
             if parked {
                 if front && steady {
-                    if state.pending.lock().unwrap().is_some() {
+                    if held {
                         deliver_held(&app).await;
                     } else {
                         unpark_popup(&app, "back");
                     }
-                } else if !front && !focus::is_open(t) {
+                } else if !front && !open {
                     unpark_popup(&app, "gone");
                 }
-            } else if !front && steady && !popup(&app).is_focused().unwrap_or(false) {
-                // Shown, but the user went to another app without the popup noticing
-                // (focus never reached it, or a minimize right after it came back).
+            } else if quiet && !front && steady {
+                // The user went to another app (or minimized theirs) while it was shown.
                 park_popup(&app);
             }
         }
+        app.state::<AppState>()
+            .following
+            .store(false, Ordering::SeqCst);
     });
 }
 
@@ -491,14 +515,14 @@ fn unpark_popup(app: &AppHandle, reason: &str) {
     let text = state.pending.lock().unwrap().take();
     let win = popup(app);
     *state.opened_at.lock().unwrap() = Instant::now();
-    if reason == "shown" {
-        // The user pressed the shortcut: they want it, so it takes focus.
+    if reason == "back" {
+        // Following the app: show it over the window, never take focus from the user.
+        focus::show_quietly(&win);
+    } else {
+        // The shortcut, or an answer to copy: the user has something to do in it.
         let _ = win.show();
         let _ = win.set_focus();
         focus::bring_to_front(&win);
-    } else {
-        // Following the app: show it over the window, never take focus from the user.
-        focus::show_quietly(&win);
     }
     let _ = win.emit("popup-unpark", UnparkEvent { reason, text });
 }
@@ -540,7 +564,7 @@ async fn deliver(app: &AppHandle, text: String) -> Result<bool, String> {
     // Otherwise the popup is just following their app: never pull a window to the front.
     let ours = win.is_focused().unwrap_or(false);
     state.inserting.store(true, Ordering::SeqCst);
-    let _ = win.hide();
+    hide_window(&win);
     let token = state.session.lock().unwrap().focus_token.clone();
     if ours || token.is_none() {
         focus::restore(token.as_deref()).await;
@@ -569,6 +593,13 @@ async fn deliver(app: &AppHandle, text: String) -> Result<bool, String> {
     let r = inject::insert(app, &text, &method).await;
     state.inserting.store(false, Ordering::SeqCst);
     r.map(|_| true)
+}
+
+/// Hides the popup. `show_quietly` shows it behind Tauri's back, so hide it at the OS level
+/// too, or Tauri (still thinking it hidden) would skip it and leave the popup on screen.
+fn hide_window(win: &WebviewWindow) {
+    let _ = win.hide();
+    focus::force_hide(win);
 }
 
 fn stop_listening_inner() {
