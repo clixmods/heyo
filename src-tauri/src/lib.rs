@@ -781,6 +781,16 @@ async fn ask(app: AppHandle, text: String, use_selection: bool) -> Result<String
 
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     *state.cancel.lock().unwrap() = Some(tx);
+    // Give the user their app back while the answer is on its way: the popup stays on top of
+    // it without focus ("Writing…") and follows it until the answer is in (`follow_target`).
+    let token = state.session.lock().unwrap().focus_token.clone();
+    if token.is_some() {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            focus::restore(token.as_deref()).await;
+            follow_target(&app);
+        });
+    }
     let result = tokio::select! {
         r = claude::ask(&settings, &profile, &text, &selection, screenshot.as_deref()) => r,
         _ = rx => Err("Cancelled.".into()),
@@ -1192,7 +1202,17 @@ pub fn run() {
                     {
                         // ours, or the user wants it to float
                     } else if busy {
-                        park_popup(&h2);
+                        // Focus went back to the app the answer is for (Hoppy hands it back
+                        // after Enter, or the user clicked it): stay on top and follow it.
+                        // Anywhere else: hide until the user is back there.
+                        let token = st.session.lock().unwrap().focus_token.clone();
+                        let target_front =
+                            token.as_deref().is_some_and(|t| focus::front_check(t)());
+                        if target_front {
+                            follow_target(&h2);
+                        } else {
+                            park_popup(&h2);
+                        }
                     } else if !just_opened {
                         hide_popup_inner(&h2);
                     }
