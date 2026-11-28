@@ -449,6 +449,9 @@ fn follow_target(app: &AppHandle) {
         // Hiding the popup can briefly hand focus to the window under it before the app the
         // user clicked takes over: count a change only when it holds for two checks in a row.
         let mut last_front: Option<bool> = None;
+        // Give up on a window that doesn't come back.
+        const GIVE_UP: Duration = Duration::from_secs(10 * 60);
+        let mut parked_since: Option<Instant> = None;
         loop {
             tokio::time::sleep(every).await;
             let state = app.state::<AppState>();
@@ -460,6 +463,16 @@ fn follow_target(app: &AppHandle) {
             let quiet =
                 !parked && win.is_visible().unwrap_or(false) && !win.is_focused().unwrap_or(false);
             let idle = !parked && !busy && !held;
+            if parked {
+                let since = *parked_since.get_or_insert_with(Instant::now);
+                if since.elapsed() > GIVE_UP {
+                    log("gave up: the target window didn't come back in 10 minutes");
+                    hide_popup_inner(&app);
+                    break;
+                }
+            } else {
+                parked_since = None;
+            }
             let Some(t) = token.as_deref() else {
                 if parked && !busy {
                     unpark_popup(&app, "ready");
@@ -571,28 +584,55 @@ async fn deliver(app: &AppHandle, text: String) -> Result<bool, String> {
     }
     if let Some(t) = token.as_deref() {
         let mut front = focus::is_front(t).await;
-        for _ in 0..2 {
-            if front || !ours {
-                break;
+        if ours {
+            for _ in 0..2 {
+                if front {
+                    break;
+                }
+                focus::restore(Some(t)).await;
+                front = focus::is_front(t).await;
             }
-            focus::restore(Some(t)).await;
-            front = focus::is_front(t).await;
+        } else {
+            // The user brought it back themselves: make sure it stays in front a moment
+            // (minimize/restore in a row hands focus around for a frame or two).
+            for _ in 0..3 {
+                if !front {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                front = focus::is_front(t).await;
+            }
         }
         if !front {
-            log(&format!(
-                "insert held: the target window is not in front ({} is)",
-                focus::front_app()
-            ));
-            *state.pending.lock().unwrap() = Some(text);
-            state.inserting.store(false, Ordering::SeqCst);
-            park_popup(app);
-            return Ok(false);
+            return Ok(hold(app, text));
         }
     }
     let method = state.settings().insert_method;
-    let r = inject::insert(app, &text, &method).await;
+    let guard = match token.as_deref() {
+        Some(t) => focus::front_check(t),
+        None => focus::front_check(""),
+    };
+    let checked = token.is_some();
+    let r = inject::insert(app, &text, &method, move || !checked || guard()).await;
     state.inserting.store(false, Ordering::SeqCst);
-    r.map(|_| true)
+    match r? {
+        None => Ok(true),
+        // It left the front right before the keys went out: nothing typed elsewhere.
+        Some(rest) => Ok(hold(app, rest)),
+    }
+}
+
+/// Keeps an answer (or what's left of it) until its window is in front again; returns false.
+fn hold(app: &AppHandle, text: String) -> bool {
+    let state = app.state::<AppState>();
+    log(&format!(
+        "insert held: the target window is not in front ({} is)",
+        focus::front_app()
+    ));
+    *state.pending.lock().unwrap() = Some(text);
+    state.inserting.store(false, Ordering::SeqCst);
+    park_popup(app);
+    false
 }
 
 /// Hides the popup. `show_quietly` shows it behind Tauri's back, so hide it at the OS level

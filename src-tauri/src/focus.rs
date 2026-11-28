@@ -211,24 +211,46 @@ pub fn is_open(token: &str) -> bool {
 pub async fn is_front(token: &str) -> bool {
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::UI::WindowsAndMessaging::{
-            GA_ROOTOWNER, GetAncestor, GetForegroundWindow,
-        };
-        let Ok(h) = token.parse::<isize>() else {
-            return false;
-        };
-        unsafe {
-            let fg = GetForegroundWindow();
-            if fg.is_null() {
-                return false;
-            }
-            let target = h as windows_sys::Win32::Foundation::HWND;
-            fg == target || GetAncestor(fg, GA_ROOTOWNER) == GetAncestor(target, GA_ROOTOWNER)
-        }
+        is_front_now(token)
     }
     #[cfg(not(target_os = "windows"))]
     {
         capture().await.as_deref() == Some(token)
+    }
+}
+
+/// A cheap check to run right before each key goes out (see `inject::insert`).
+/// Windows only; elsewhere the window can't be checked that fast, so it always passes.
+pub fn front_check(token: &str) -> impl Fn() -> bool + Send + Sync + Clone + 'static {
+    let token = token.to_string();
+    move || {
+        #[cfg(target_os = "windows")]
+        {
+            is_front_now(&token)
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = &token;
+            true
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn is_front_now(token: &str) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GA_ROOTOWNER, GetAncestor, GetForegroundWindow,
+    };
+    let Ok(h) = token.parse::<isize>() else {
+        return false;
+    };
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_null() {
+            return false;
+        }
+        let target = h as windows_sys::Win32::Foundation::HWND;
+        fg == target || GetAncestor(fg, GA_ROOTOWNER) == GetAncestor(target, GA_ROOTOWNER)
     }
 }
 

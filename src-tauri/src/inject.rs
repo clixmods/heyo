@@ -71,44 +71,78 @@ pub async fn capture_selection(app: &AppHandle) -> String {
 }
 
 /// Writes the text into the focused field: paste (fast, clipboard restored) or simulated typing.
-pub async fn insert(app: &AppHandle, text: &str, method: &str) -> Result<(), String> {
+/// `still_front` is checked right before any key goes out (on the thread that sends them):
+/// when the target window is no longer in front, nothing more is typed and the part not typed
+/// is returned (`Some`), so it never lands in another app. `None` = all of it went in.
+pub async fn insert(
+    app: &AppHandle,
+    text: &str,
+    method: &str,
+    still_front: impl Fn() -> bool + Send + Sync + Clone + 'static,
+) -> Result<Option<String>, String> {
     if text.is_empty() {
-        return Ok(());
+        return Ok(None);
     }
     release_modifiers(app).await;
 
     if method == "type" {
-        let t = text.to_string();
-        return on_main(app, move || -> Result<(), String> {
-            let mut e = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
-            e.text(&t).map_err(|e| e.to_string())
-        })
-        .await;
+        // In small pieces, checking before each, so leaving mid-way stops at a clean point.
+        const PIECE: usize = 24;
+        let chars: Vec<char> = text.chars().collect();
+        for (i, piece) in chars.chunks(PIECE).enumerate() {
+            let s: String = piece.iter().collect();
+            let front = still_front.clone();
+            let typed = on_main(app, move || -> Result<bool, String> {
+                if !front() {
+                    return Ok(false);
+                }
+                let mut e = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
+                e.text(&s).map_err(|e| e.to_string())?;
+                Ok(true)
+            })
+            .await?;
+            if !typed {
+                return Ok(Some(chars[i * PIECE..].iter().collect()));
+            }
+        }
+        return Ok(None);
     }
 
     let cb = app.clipboard();
     let saved = cb.read_text().ok();
     cb.write_text(text.to_string()).map_err(|e| e.to_string())?;
     sleep(40).await;
-    chord(app, 'v').await;
+    if !chord_if(app, 'v', still_front).await {
+        restore_clipboard(app, saved);
+        return Ok(Some(text.to_string()));
+    }
     sleep(450).await; // let the target app read the clipboard before restoring it
     restore_clipboard(app, saved);
-    Ok(())
+    Ok(None)
 }
 
-async fn chord(app: &AppHandle, c: char) {
-    let res = on_main(app, move || -> Result<(), String> {
+/// Sends Ctrl/Cmd+key only if `ok()` holds at that moment. Returns whether it was sent.
+async fn chord_if(app: &AppHandle, c: char, ok: impl Fn() -> bool + Send + 'static) -> bool {
+    let res = on_main(app, move || -> Result<bool, String> {
+        if !ok() {
+            return Ok(false);
+        }
         let mut e = Enigo::new(&Settings::default()).map_err(|e| e.to_string())?;
         let m = shortcut_modifier();
         e.key(m, Direction::Press).map_err(|e| e.to_string())?;
         let r = e.key(Key::Unicode(c), Direction::Click);
         e.key(m, Direction::Release).map_err(|e| e.to_string())?;
-        r.map_err(|e| e.to_string())
+        r.map_err(|e| e.to_string()).map(|_| true)
     })
     .await;
-    if let Err(e) = res {
+    res.unwrap_or_else(|e| {
         crate::log(&format!("keyboard simulation: {e}"));
-    }
+        true
+    })
+}
+
+async fn chord(app: &AppHandle, c: char) {
+    chord_if(app, c, || true).await;
 }
 
 /// Only text is restored: images or files that were on the clipboard are not kept.
