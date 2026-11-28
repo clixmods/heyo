@@ -16,6 +16,10 @@ pub const OUTPUT_CHAT: &str = "chat"; // the answer is shown in the popup
 pub struct Profile {
     pub id: String,
     pub name: String,
+    /// Icon shown in the popup and the settings sidebar (a name from `ui/icons.js`; empty = a dot).
+    pub icon: String,
+    /// Accent color of the popup and the sidebar mark (a name from `ui/base.css`; empty = orange).
+    pub color: String,
     pub hotkey: String,
     pub backend: String,
     pub model: String,
@@ -33,6 +37,8 @@ pub struct Profile {
     pub keep_history: bool,
     /// Capture the screen when the shortcut fires and send it along as context.
     pub attach_screenshot: bool,
+    /// Keyboard hints at the bottom of the popup. None = the General setting.
+    pub show_hints: Option<bool>,
 }
 
 impl Default for Profile {
@@ -40,6 +46,8 @@ impl Default for Profile {
         Self {
             id: uuid::Uuid::new_v4().simple().to_string()[..8].to_string(),
             name: "New profile".into(),
+            icon: String::new(),
+            color: String::new(),
             hotkey: String::new(),
             backend: BACKEND_CLAUDE_CODE.into(),
             model: "claude-opus-5-5".into(),
@@ -51,6 +59,7 @@ impl Default for Profile {
             use_selection: true,
             keep_history: false,
             attach_screenshot: false,
+            show_hints: None,
         }
     }
 }
@@ -59,7 +68,8 @@ impl Default for Profile {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct PopupLook {
-    /// Keyboard hints at the bottom of the popup.
+    /// Keyboard hints at the bottom of the popup, for profiles that don't set their own
+    /// (and the starting value of new profiles).
     pub show_hints: bool,
     /// Model, effort and engine in the popup header.
     pub show_model: bool,
@@ -72,7 +82,7 @@ pub struct PopupLook {
 impl Default for PopupLook {
     fn default() -> Self {
         Self {
-            show_hints: true,
+            show_hints: false,
             show_model: true,
             translucent: false,
             close_on_click_outside: true,
@@ -110,6 +120,7 @@ impl Default for AppSettings {
                 Profile {
                     id: "translate".into(),
                     name: "Translate → EN".into(),
+                    icon: "globe".into(),
                     hotkey: "Ctrl+Alt+T".into(),
                     instructions: "You are a translator. Translate the user's message (or the selected text) into natural, idiomatic English.\nKeep the tone, register, punctuation, emojis and formatting. Don't answer the message: translate it.".into(),
                     ..Default::default()
@@ -117,6 +128,7 @@ impl Default for AppSettings {
                 Profile {
                     id: "fix".into(),
                     name: "Fix writing".into(),
+                    icon: "pen".into(),
                     hotkey: "Ctrl+Alt+R".into(),
                     instructions: "Fix the spelling, grammar and punctuation of the text, in its original language.\nDon't change its meaning, tone or style. Don't answer the text: return it corrected.".into(),
                     ..Default::default()
@@ -124,6 +136,7 @@ impl Default for AppSettings {
                 Profile {
                     id: "chat".into(),
                     name: "Chat".into(),
+                    icon: "chat".into(),
                     hotkey: "Ctrl+Alt+C".into(),
                     effort: "medium".into(),
                     output: OUTPUT_CHAT.into(),

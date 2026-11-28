@@ -1,41 +1,84 @@
-/* Shared design tokens: quiet, warm neutrals with one accent. Light & dark follow the OS. */
+/* Shared design tokens. Calm, airy, browser-chrome feel: a softly tinted frame (apricot to
+   lilac to mist), clean surfaces floating on it, generous radii, one warm accent.
+   Light and dark follow the OS. */
 :root {
-  --bg: #fbfaf8;
+  /* frame ("chrome"): the tinted wash surfaces float on */
+  --chrome-1: #f5ece5;
+  --chrome-2: #efeaf3;
+  --chrome-3: #e7ecf3;
+  --chrome: linear-gradient(155deg, var(--chrome-1) 0%, var(--chrome-2) 55%, var(--chrome-3) 100%);
+
+  /* surfaces */
+  --bg: #fdfcfc;
   --bg-elev: #ffffff;
-  --bg-soft: #f2f0ec;
-  --bg-hover: #ebe8e2;
-  --line: rgba(20, 18, 14, 0.09);
-  --line-strong: rgba(20, 18, 14, 0.16);
-  --text: #1d1b18;
-  --text-soft: #5d5952;
-  --text-faint: #6b665d;
+  --bg-soft: rgba(52, 36, 70, 0.045);
+  --bg-hover: rgba(52, 36, 70, 0.075);
+  --bg-pressed: rgba(52, 36, 70, 0.11);
+  --line: rgba(40, 26, 58, 0.08);
+  --line-strong: rgba(40, 26, 58, 0.15);
+
+  /* text */
+  --text: #1c1a21;
+  --text-soft: #56525e;
+  --text-faint: #6a6672;
+
+  /* accent: Hoppy's warm orange, with a coral lean for gradients */
   --accent: #d9774e;
+  --accent-ink: #ad5129;
   --accent-soft: rgba(217, 119, 78, 0.12);
-  --danger: #c2453d;
-  --ok: #3f8f5b;
-  --shadow: 0 18px 50px -12px rgba(20, 16, 10, 0.28), 0 2px 8px rgba(20, 16, 10, 0.08);
+  --accent-grad: linear-gradient(135deg, #ee9862 0%, #d9774e 50%, #d0636a 100%);
+  --ring: rgba(217, 119, 78, 0.45);
+
+  --danger: #bd3a33;
+  --ok: #2d7a4a;
+
+  --shadow-card: 0 1px 2px rgba(30, 18, 44, 0.05), 0 10px 30px -14px rgba(30, 18, 44, 0.2);
+  --shadow-pop: 0 6px 14px -6px rgba(30, 18, 44, 0.26), 0 1px 3px rgba(30, 18, 44, 0.07);
+  --shadow: 0 24px 60px -18px rgba(30, 18, 44, 0.32), 0 2px 8px rgba(30, 18, 44, 0.08);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+
+  --radius-sm: 10px;
   --radius: 14px;
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", Inter, Roboto, "Helvetica Neue", sans-serif;
+  --radius-lg: 20px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font: "Segoe UI Variable Text", "Segoe UI Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-display: "Segoe UI Variable Display", "Segoe UI Variable", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1c1b1a;
-    --bg-elev: #242321;
-    --bg-soft: #2a2927;
-    --bg-hover: #33312e;
-    --line: rgba(255, 250, 240, 0.08);
-    --line-strong: rgba(255, 250, 240, 0.15);
-    --text: #f1eee8;
-    --text-soft: #b5b0a7;
-    --text-faint: #9c978e;
-    --accent: #e8875d;
-    --accent-soft: rgba(232, 135, 93, 0.15);
-    --danger: #ec6d64;
-    --ok: #6cc08a;
-    --shadow: 0 22px 60px -12px rgba(0, 0, 0, 0.6), 0 2px 10px rgba(0, 0, 0, 0.35);
+    --chrome-1: #261e23;
+    --chrome-2: #1f1d27;
+    --chrome-3: #191b22;
+
+    --bg: #232228;
+    --bg-elev: #2b2a31;
+    --bg-soft: rgba(250, 240, 255, 0.05);
+    --bg-hover: rgba(250, 240, 255, 0.085);
+    --bg-pressed: rgba(250, 240, 255, 0.12);
+    --line: rgba(250, 240, 255, 0.08);
+    --line-strong: rgba(250, 240, 255, 0.14);
+
+    --text: #f2f0f5;
+    --text-soft: #bab5c1;
+    --text-faint: #a09ba8;
+
+    --accent: #ee9064;
+    --accent-ink: #f3a57f;
+    --accent-soft: rgba(238, 144, 100, 0.15);
+    --accent-grad: linear-gradient(135deg, #f4a26c 0%, #e5855a 50%, #d86d73 100%);
+    --ring: rgba(238, 144, 100, 0.55);
+
+    --danger: #f07c72;
+    --ok: #74c994;
+
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 34px -14px rgba(0, 0, 0, 0.6);
+    --shadow-pop: 0 6px 14px -6px rgba(0, 0, 0, 0.6), 0 1px 3px rgba(0, 0, 0, 0.35);
+    --shadow: 0 26px 64px -18px rgba(0, 0, 0, 0.7), 0 2px 10px rgba(0, 0, 0, 0.4);
+    --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
     color-scheme: dark;
   }
 }
@@ -49,25 +92,86 @@ html, body {
   line-height: 1.45;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 button, input, select, textarea { font: inherit; color: inherit; }
 
 button { cursor: pointer; }
+button:disabled { cursor: default; }
+
+::selection { background: color-mix(in srgb, var(--accent) 26%, transparent); color: var(--text); }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 
 kbd {
+  display: inline-block;
+  min-width: 18px;
   font-family: var(--font);
   font-size: 11px;
-  padding: 1px 5px;
-  border-radius: 5px;
-  border: 1px solid var(--line-strong);
-  border-bottom-width: 2px;
+  line-height: 16px;
+  text-align: center;
+  padding: 0 5px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
   color: var(--text-soft);
-  background: var(--bg-soft);
+  background: var(--bg-elev);
+  box-shadow: 0 1px 0 var(--line-strong);
 }
 
 .hidden { display: none !important; }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background-color: var(--text-faint); }
 ::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+
+/* Profile colors: set data-accent on any element (the popup's body, a sidebar item, the profile
+   pane) and the accent tokens below it follow. Empty or "orange" = Hoppy's default above.
+   Each -ink keeps 4.5:1 on the surfaces and on its own soft tint, light and dark. */
+[data-accent=""], [data-accent="orange"] {
+  --accent: #d9774e;
+  --accent-ink: #ad5129;
+  --accent-soft: rgba(217, 119, 78, 0.12);
+  --accent-grad: linear-gradient(135deg, #ee9862 0%, #d9774e 50%, #d0636a 100%);
+  --ring: rgba(217, 119, 78, 0.45);
+}
+[data-accent="rose"]   { --accent: #d95a7c; --accent-ink: #b0385a; }
+[data-accent="violet"] { --accent: #8c66db; --accent-ink: #6a46b8; }
+[data-accent="blue"]   { --accent: #4f80e0; --accent-ink: #2f5fbd; }
+[data-accent="teal"]   { --accent: #2f9a94; --accent-ink: #1b726d; }
+[data-accent="green"]  { --accent: #4f9a55; --accent-ink: #33763a; }
+[data-accent="amber"]  { --accent: #d39b2b; --accent-ink: #8a600f; }
+[data-accent="slate"]  { --accent: #717887; --accent-ink: #4b5262; }
+[data-accent]:not([data-accent=""]):not([data-accent="orange"]) {
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
+  --ring: color-mix(in srgb, var(--accent) 45%, transparent);
+  --accent-grad: linear-gradient(135deg, color-mix(in srgb, var(--accent) 72%, #fff) 0%, var(--accent) 55%, color-mix(in srgb, var(--accent) 84%, #000) 100%);
+}
+@media (prefers-color-scheme: dark) {
+  [data-accent=""], [data-accent="orange"] {
+    --accent: #ee9064;
+    --accent-ink: #f3a57f;
+    --accent-soft: rgba(238, 144, 100, 0.15);
+    --accent-grad: linear-gradient(135deg, #f4a26c 0%, #e5855a 50%, #d86d73 100%);
+    --ring: rgba(238, 144, 100, 0.55);
+  }
+  [data-accent="rose"]   { --accent: #f0809d; --accent-ink: #f59bb3; }
+  [data-accent="violet"] { --accent: #a98bf0; --accent-ink: #bca5f5; }
+  [data-accent="blue"]   { --accent: #7ea3f2; --accent-ink: #9cb9f6; }
+  [data-accent="teal"]   { --accent: #5cc4bd; --accent-ink: #80d4ce; }
+  [data-accent="green"]  { --accent: #7cc482; --accent-ink: #9bd3a0; }
+  [data-accent="amber"]  { --accent: #e8b850; --accent-ink: #f0ca72; }
+  [data-accent="slate"]  { --accent: #a3a9b6; --accent-ink: #bcc1cc; }
+  [data-accent]:not([data-accent=""]):not([data-accent="orange"]) {
+    --accent-soft: color-mix(in srgb, var(--accent) 15%, transparent);
+    --ring: color-mix(in srgb, var(--accent) 55%, transparent);
+  }
+}
+
+/* Profile mark: the profile's icon, or this dot when it has none. */
+.dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent-grad); flex: none; }

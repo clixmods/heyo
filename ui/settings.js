@@ -77,7 +77,9 @@ function renderSidebar() {
     ...draft.profiles.map((p) => {
       const b = document.createElement("button");
       b.className = "side-item" + (p.id === selected ? " active" : "");
-      b.innerHTML = `<span class="name"></span><span class="keys"></span>`;
+      b.innerHTML = `<span class="pic"></span><span class="name"></span><span class="keys"></span>`;
+      b.dataset.accent = p.color || "";
+      b.querySelector(".pic").replaceChildren(profileMark(p.icon));
       b.querySelector(".name").textContent = p.name || "Untitled";
       b.querySelector(".keys").replaceChildren(...(p.hotkey ? keycaps(p.hotkey) : []));
       b.title = p.hotkey ? `${p.name} — ${prettyHotkey(p.hotkey)}` : p.name;
@@ -94,7 +96,9 @@ function renderProfile() {
   $("generalPane").classList.toggle("hidden", selected !== "general");
   if (!p) return;
 
+  $("profilePane").dataset.accent = p.color || "";
   $("pName").value = p.name;
+  renderIcon(p);
   setHotkeyBtn($("pHotkey"), p.hotkey);
   $("pInstructions").value = p.instructions;
   setSeg($("pOutput"), p.output);
@@ -109,6 +113,7 @@ function renderProfile() {
   $("pEffort").value = p.effort || "";
   $("pUseSelection").checked = p.useSelection;
   $("pKeepHistory").checked = p.keepHistory;
+  $("pShowHints").checked = p.showHints ?? draft.popup.showHints;
   $("pScreenshot").checked = !!p.attachScreenshot;
   $("pScreenshotRow").classList.toggle("hidden", !data.screenshotAvailable);
   $("pRepo").value = p.repoPath || "";
@@ -118,6 +123,12 @@ function renderProfile() {
       ? "Faster. Uses your API key, billed per use."
       : "Uses your Claude subscription. A few seconds to start.";
   renderFiles(p);
+}
+
+function renderIcon(p) {
+  $("pIconBtn").replaceChildren(profileMark(p.icon));
+  $("pIconGrid").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.icon === p.icon)));
+  $("pColorRow").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.accent === (p.color || ""))));
 }
 
 function renderFiles(p) {
@@ -189,10 +200,80 @@ $("pModel").addEventListener("change", (e) => { currentProfile().model = e.targe
 $("pEffort").addEventListener("change", (e) => { currentProfile().effort = e.target.value; updateSaveBar(); });
 $("pUseSelection").addEventListener("change", (e) => { currentProfile().useSelection = e.target.checked; updateSaveBar(); });
 $("pKeepHistory").addEventListener("change", (e) => { currentProfile().keepHistory = e.target.checked; updateSaveBar(); });
+$("pShowHints").addEventListener("change", (e) => { currentProfile().showHints = e.target.checked; updateSaveBar(); });
 $("pScreenshot").addEventListener("change", (e) => { currentProfile().attachScreenshot = e.target.checked; updateSaveBar(); });
 
 onSeg($("pOutput"), (v) => { currentProfile().output = v; updateSaveBar(); });
 onSeg($("pBackend"), (v) => { currentProfile().backend = v; renderProfile(); updateSaveBar(); });
+
+// ---------------------------------------------------------------- icon picker
+
+function toggleIconPop(show = $("pIconPop").classList.contains("hidden")) {
+  $("pIconPop").classList.toggle("hidden", !show);
+  $("pIconBtn").setAttribute("aria-expanded", String(show));
+  if (show) ($("pIconGrid").querySelector('[aria-pressed="true"]') || $("pIconGrid").firstElementChild).focus();
+}
+
+function setIcon(name) {
+  const p = currentProfile();
+  if (!p) return;
+  p.icon = name;
+  renderIcon(p);
+  renderSidebar();
+  updateSaveBar();
+  toggleIconPop(false);
+  $("pIconBtn").focus();
+}
+
+// Profile colors (tokens in base.css). "" = Hoppy's orange.
+const PROFILE_COLORS = [["", "Orange"], ["rose", "Rose"], ["violet", "Violet"], ["blue", "Blue"], ["teal", "Teal"], ["green", "Green"], ["amber", "Amber"], ["slate", "Slate"]];
+
+function setColor(name) {
+  const p = currentProfile();
+  if (!p) return;
+  p.color = name;
+  $("profilePane").dataset.accent = name;
+  renderIcon(p);
+  renderSidebar();
+  updateSaveBar();
+}
+
+$("pColorRow").replaceChildren(
+  ...PROFILE_COLORS.map(([name, label]) => {
+    const b = document.createElement("button");
+    b.className = "color-choice";
+    b.dataset.accent = name;
+    b.title = label;
+    b.setAttribute("aria-label", label);
+    b.addEventListener("click", () => setColor(name));
+    return b;
+  })
+);
+
+$("pIconGrid").replaceChildren(
+  ...Object.keys(HOPPY_ICONS).map((name) => {
+    const b = document.createElement("button");
+    b.className = "icon-choice";
+    b.dataset.icon = name;
+    b.title = name[0].toUpperCase() + name.slice(1);
+    b.setAttribute("aria-label", b.title);
+    b.append(profileIcon(name));
+    b.addEventListener("click", () => setIcon(name));
+    return b;
+  })
+);
+$("pIconBtn").addEventListener("click", () => toggleIconPop());
+$("pIconNone").addEventListener("click", () => setIcon(""));
+document.addEventListener("mousedown", (e) => {
+  if (!e.target.closest(".icon-pick")) toggleIconPop(false);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("pIconPop").classList.contains("hidden")) {
+    e.preventDefault();
+    toggleIconPop(false);
+    $("pIconBtn").focus();
+  }
+});
 
 $("pAddFiles").addEventListener("click", async () => {
   const files = await invoke("pick_files");
@@ -220,9 +301,9 @@ $("pHotkeyClear").addEventListener("click", () => {
 
 $("addProfile").addEventListener("click", () => {
   const p = {
-    id: newId(), name: "New profile", hotkey: "", backend: "claude-code", model: "claude-opus-5-5",
+    id: newId(), name: "New profile", icon: "", color: "", hotkey: "", backend: "claude-code", model: "claude-opus-5-5",
     effort: "low", instructions: "", knowledgeFiles: [], repoPath: "", output: "insert",
-    useSelection: true, keepHistory: false, attachScreenshot: false,
+    useSelection: true, keepHistory: false, attachScreenshot: false, showHints: null,
   };
   draft.profiles.push(p);
   select(p.id);
